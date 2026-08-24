@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # IncidentIQ log ingestion service.
-# Build context is the repository root, because this project references
-# services/shared. Build with:
+# Build context is the repository root, because this project references the
+# shared class libraries under services/. Build with:
 #   docker build -f services/ingestion/Dockerfile .
 
 # ---------- build ----------
@@ -10,12 +10,18 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Restore first, on project files only, so the layer is reused whenever
-# source changes but dependencies do not.
+# source changes but dependencies do not. All library projects are listed
+# here regardless of whether this service references them today - it keeps the
+# three Dockerfiles identical and stops a new reference from breaking the build.
 COPY Directory.Build.props ./
+COPY services/domain/IncidentIQ.Domain.csproj services/domain/
+COPY services/persistence/IncidentIQ.Persistence.csproj services/persistence/
 COPY services/shared/IncidentIQ.Shared.csproj services/shared/
 COPY services/ingestion/IncidentIQ.Ingestion.csproj services/ingestion/
 RUN dotnet restore services/ingestion/IncidentIQ.Ingestion.csproj
 
+COPY services/domain/ services/domain/
+COPY services/persistence/ services/persistence/
 COPY services/shared/ services/shared/
 COPY services/ingestion/ services/ingestion/
 RUN dotnet publish services/ingestion/IncidentIQ.Ingestion.csproj \

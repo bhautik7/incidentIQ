@@ -60,3 +60,27 @@ ai-test: ## Lint and test the Python worker
 	cd $(AI) && .venv/bin/ruff check app tests && .venv/bin/python -m pytest -q
 
 verify: dotnet-build dotnet-test web-build ## Build and test everything that does not need Docker
+
+# ---- database ----------------------------------------------------------
+PERSISTENCE := services/persistence/IncidentIQ.Persistence.csproj
+MIGRATIONS_CONN ?= Host=localhost;Port=5433;Database=incidentiq;Username=incidentiq;Password=$(POSTGRES_PASSWORD)
+
+.PHONY: db-migrate db-script db-reset db-add-migration db-test
+
+db-migrate: ## Apply migrations to the local database
+	INCIDENTIQ_MIGRATIONS_CONNECTION="$(MIGRATIONS_CONN)" dotnet ef database update --project $(PERSISTENCE)
+
+db-script: ## Print the full schema as SQL (review this before deploying)
+	dotnet ef migrations script --idempotent --project $(PERSISTENCE)
+
+db-add-migration: ## make db-add-migration NAME=AddSomething
+	@test -n "$(NAME)" || (echo "usage: make db-add-migration NAME=AddSomething" && exit 1)
+	dotnet ef migrations add $(NAME) --project $(PERSISTENCE) --output-dir Migrations
+
+db-reset: ## Drop and recreate the local schema, then re-seed via the API
+	INCIDENTIQ_MIGRATIONS_CONNECTION="$(MIGRATIONS_CONN)" dotnet ef database update 0 --project $(PERSISTENCE)
+	INCIDENTIQ_MIGRATIONS_CONNECTION="$(MIGRATIONS_CONN)" dotnet ef database update --project $(PERSISTENCE)
+	$(COMPOSE) restart api
+
+db-test: ## Run the persistence integration tests (needs Docker for Testcontainers)
+	dotnet test tests/IncidentIQ.Persistence.Tests/IncidentIQ.Persistence.Tests.csproj

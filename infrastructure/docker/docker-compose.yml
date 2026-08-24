@@ -247,6 +247,11 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${VITE_DEV_ORIGIN:-http://localhost:5173}
+      # Local-development convenience. In a deployed environment migrations run
+      # as a separate gated step, because two replicas starting at once race.
+      IncidentIQ__RunMigrationsOnStartup: ${DB_RUN_MIGRATIONS_ON_STARTUP:-false}
+      IncidentIQ__SeedReferenceData: ${DB_SEED_REFERENCE_DATA:-false}
+      IncidentIQ__SeedDevelopmentData: ${DB_SEED_DEVELOPMENT_DATA:-false}
     ports:
       - "${API_HOST_PORT:-5080}:8080"
 

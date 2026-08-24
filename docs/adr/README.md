@@ -11,3 +11,5 @@ new record that supersedes the old one rather than editing history.
 | [0004](0004-python-service-for-ai-workload.md) | A separate Python service for the AI workload | Accepted |
 | [0005](0005-split-api-and-ingestion.md) | Split the API and ingestion into two services | Accepted |
 | [0006](0006-defer-redis-and-object-storage.md) | Provision Redis and MinIO but do not use them yet | Accepted |
+| [0007](0007-log-events-key-and-partitioning.md) | LogEvents: bigint key, sampled rows, no partitioning yet | Accepted |
+| [0008](0008-tenant-isolation-strategy.md) | Tenant isolation through composite foreign keys | Accepted |

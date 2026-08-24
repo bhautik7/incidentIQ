@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Domain</RootNamespace>
+    <AssemblyName>IncidentIQ.Domain</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A value type for embeddings, not an ORM. The domain still has no
+         dependency on Entity Framework or on any particular database. -->
+    <PackageReference Include="Pgvector" Version="0.3.2" />
+  </ItemGroup>
+
+</Project>
