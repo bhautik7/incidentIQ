@@ -1,0 +1,13 @@
+# Tooling configuration only. Dependencies live in requirements*.txt so the
+# Docker build can install them in a cacheable layer before the source is copied.
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

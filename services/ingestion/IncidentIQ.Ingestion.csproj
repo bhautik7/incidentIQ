@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Ingestion</RootNamespace>
+    <AssemblyName>IncidentIQ.Ingestion</AssemblyName>
+    <UserSecretsId>incidentiq-ingestion</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../shared/IncidentIQ.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

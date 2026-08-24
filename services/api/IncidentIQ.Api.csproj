@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Api</RootNamespace>
+    <AssemblyName>IncidentIQ.Api</AssemblyName>
+    <UserSecretsId>incidentiq-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../shared/IncidentIQ.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

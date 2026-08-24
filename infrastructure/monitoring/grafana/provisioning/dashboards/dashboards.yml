@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Dashboards are not defined yet. The provider is wired up now so that adding a
+# JSON dashboard to this folder is the only step needed later.
+providers:
+  - name: IncidentIQ
+    orgId: 1
+    folder: IncidentIQ
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/services/" />
+  <Folder Name="/services/api/">
+    <Project Path="services/api/IncidentIQ.Api.csproj" />
+  </Folder>
+  <Folder Name="/services/event-processor/">
+    <Project Path="services/event-processor/IncidentIQ.EventProcessor.csproj" />
+  </Folder>
+  <Folder Name="/services/ingestion/">
+    <Project Path="services/ingestion/IncidentIQ.Ingestion.csproj" />
+  </Folder>
+  <Folder Name="/services/shared/">
+    <Project Path="services/shared/IncidentIQ.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IncidentIQ.Api.Tests/IncidentIQ.Api.Tests.csproj" />
+  </Folder>
+</Solution>

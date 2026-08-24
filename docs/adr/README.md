@@ -1,0 +1,13 @@
+# Architecture Decision Records
+
+One file per decision, numbered and immutable. When a decision changes, add a
+new record that supersedes the old one rather than editing history.
+
+| # | Decision | Status |
+|---|---|---|
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| [0002](0002-kafka-as-the-event-backbone.md) | Kafka as the event backbone | Accepted |
+| [0003](0003-postgresql-with-pgvector.md) | PostgreSQL with pgvector as the only datastore | Accepted |
+| [0004](0004-python-service-for-ai-workload.md) | A separate Python service for the AI workload | Accepted |
+| [0005](0005-split-api-and-ingestion.md) | Split the API and ingestion into two services | Accepted |
+| [0006](0006-defer-redis-and-object-storage.md) | Provision Redis and MinIO but do not use them yet | Accepted |

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.EventProcessor</RootNamespace>
+    <AssemblyName>IncidentIQ.EventProcessor</AssemblyName>
+    <UserSecretsId>incidentiq-event-processor</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../shared/IncidentIQ.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,40 @@
+# ---- secrets / local config ----
+.env
+.env.local
+*.env
+!.env.example
+appsettings.Local.json
+
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+.idea/
+TestResults/
+
+# ---- Node ----
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---- OS / editors ----
+.DS_Store
+Thumbs.db
+
+# ---- docker volumes / local data ----
+infrastructure/docker/data/

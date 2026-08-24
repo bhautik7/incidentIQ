@@ -1,0 +1,15 @@
+# Web host
+fastapi==0.121.2
+uvicorn==0.41.0
+
+# Configuration + structured logging
+pydantic==2.12.4
+pydantic-settings==2.13.1
+structlog==25.5.0
+
+# Observability
+prometheus-fastapi-instrumentator==7.1.0
+
+# Infrastructure clients (used by readiness checks now, by the pipeline in Phase 3)
+psycopg[binary]==3.2.12
+confluent-kafka==2.15.0
