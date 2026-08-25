@@ -8,7 +8,15 @@
 
   <ItemGroup>
     <ProjectReference Include="../messaging/IncidentIQ.Messaging.csproj" />
+    <ProjectReference Include="../persistence/IncidentIQ.Persistence.csproj" />
     <ProjectReference Include="../shared/IncidentIQ.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The topology cache is process-wide by design; the test project needs to
+         reset it between cases so one test's cache does not answer another's
+         query against a different database. -->
+    <InternalsVisibleTo Include="IncidentIQ.EventProcessor.Tests" />
   </ItemGroup>
 
 </Project>

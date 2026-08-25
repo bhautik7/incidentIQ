@@ -50,4 +50,36 @@ public static class MessagingServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers a batching consumer for one topic.
+    ///
+    /// Use this instead of the per-message variant whenever the handler talks
+    /// to a database: batching is what turns one round trip per log line into
+    /// one per batch.
+    /// </summary>
+    public static IServiceCollection AddIncidentIQKafkaBatchConsumer<TPayload, THandler>(
+        this IServiceCollection services,
+        string topic,
+        string consumerGroup,
+        string? deadLetterTopic = null,
+        int maxBatchSize = 500,
+        int maxBatchWaitMs = 250)
+        where THandler : class, IEventBatchHandler<TPayload>
+    {
+        services.AddScoped<THandler>();
+
+        services.AddSingleton(new KafkaBatchConsumerSubscription<TPayload>
+        {
+            Topic = topic,
+            ConsumerGroup = consumerGroup,
+            DeadLetterTopic = deadLetterTopic,
+            MaxBatchSize = maxBatchSize,
+            MaxBatchWaitMs = maxBatchWaitMs
+        });
+
+        services.AddHostedService<KafkaBatchConsumerService<TPayload, THandler>>();
+
+        return services;
+    }
 }

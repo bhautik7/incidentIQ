@@ -1,7 +1,8 @@
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
-using IncidentIQ.EventProcessor;
+using IncidentIQ.EventProcessor.Processing;
 using IncidentIQ.Messaging;
+using IncidentIQ.Persistence;
 using IncidentIQ.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,13 +16,25 @@ builder.AddIncidentIqDefaults("incidentiq-event-processor", options =>
     options.CheckKafka = true;
 });
 
-// Needed by the consumer to dead-letter what it cannot handle.
+builder.Services.Configure<ProcessingOptions>(builder.Configuration.GetSection(ProcessingOptions.SectionName));
+
+var connectionString = builder.Configuration.GetConnectionString("Postgres")
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings__Postgres is required: the processor cannot persist anything without it.");
+
+builder.Services.AddIncidentIQPersistence(connectionString);
+builder.Services.AddScoped<TopologyResolver>();
+builder.Services.AddScoped<LogBatchWriter>();
+
+// Needed both to publish logs.normalized and to dead-letter what cannot be handled.
 builder.Services.AddIncidentIQKafkaProducer(builder.Configuration);
 
-builder.Services.AddIncidentIQKafkaConsumer<LogReceived, LogReceivedHandler>(
+builder.Services.AddIncidentIQKafkaBatchConsumer<LogReceived, LogReceivedBatchHandler>(
     topic: Topics.LogsRaw,
     consumerGroup: ConsumerGroups.IncidentProcessor,
-    deadLetterTopic: Topics.LogsFailed);
+    deadLetterTopic: Topics.LogsFailed,
+    maxBatchSize: builder.Configuration.GetValue("Processing:MaxBatchSize", 500),
+    maxBatchWaitMs: builder.Configuration.GetValue("Processing:MaxBatchWaitMs", 250));
 
 var app = builder.Build();
 
