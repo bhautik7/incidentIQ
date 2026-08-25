@@ -14,3 +14,5 @@ new record that supersedes the old one rather than editing history.
 | [0007](0007-log-events-key-and-partitioning.md) | LogEvents: bigint key, sampled rows, no partitioning yet | Accepted |
 | [0008](0008-tenant-isolation-strategy.md) | Tenant isolation through composite foreign keys | Accepted |
 | [0009](0009-event-envelope-and-partition-keys.md) | A uniform event envelope, and keys that decide ordering | Accepted |
+| [0010](0010-ingestion-accepts-partial-batches.md) | Ingestion accepts partial batches | Accepted |
+| [0011](0011-ingestion-tenant-resolution.md) | Ingestion resolves tenants without a database | Accepted |

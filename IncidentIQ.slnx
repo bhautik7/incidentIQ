@@ -26,6 +26,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IncidentIQ.Api.Tests/IncidentIQ.Api.Tests.csproj" />
+    <Project Path="tests/IncidentIQ.Ingestion.Tests/IncidentIQ.Ingestion.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Messaging.Tests/IncidentIQ.Messaging.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Persistence.Tests/IncidentIQ.Persistence.Tests.csproj" />
   </Folder>

@@ -66,16 +66,7 @@ public sealed class KafkaEventProducer : IEventProducer, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
 
-        var message = new Message<string, byte[]>
-        {
-            Key = partitionKey,
-            Value = EventJson.SerializeToUtf8Bytes(envelope),
-            // Duplicated from the body so a router, a monitoring tool or a
-            // dead-letter inspector can work without deserialising anything.
-            Headers = BuildHeaders(envelope)
-        };
-
-        var result = await _producer.ProduceAsync(topic, message, cancellationToken);
+        var result = await _producer.ProduceAsync(topic, BuildMessage(partitionKey, envelope), cancellationToken);
 
         _logger.LogInformation(
             "Published {EventType} v{EventVersion} to {Topic}[{Partition}]@{Offset} key={Key} eventId={EventId} correlationId={CorrelationId}",
@@ -84,6 +75,56 @@ public sealed class KafkaEventProducer : IEventProducer, IDisposable
 
         return new PublishResult(result.Topic, result.Partition.Value, result.Offset.Value);
     }
+
+    public async Task<IReadOnlyList<PublishResult>> PublishBatchAsync<TPayload>(
+        string topic,
+        IReadOnlyList<KeyedEvent<TPayload>> messages,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(topic);
+
+        if (messages.Count == 0)
+        {
+            return [];
+        }
+
+        // Enqueue everything first. ProduceAsync hands the message to
+        // librdkafka synchronously and returns a task for the acknowledgement,
+        // so this loop fills the batch rather than waiting on the network.
+        var pending = new Task<DeliveryResult<string, byte[]>>[messages.Count];
+
+        for (var i = 0; i < messages.Count; i++)
+        {
+            var (partitionKey, envelope) = messages[i];
+            pending[i] = _producer.ProduceAsync(topic, BuildMessage(partitionKey, envelope), cancellationToken);
+        }
+
+        var delivered = await Task.WhenAll(pending);
+
+        var results = new PublishResult[delivered.Length];
+        for (var i = 0; i < delivered.Length; i++)
+        {
+            results[i] = new PublishResult(delivered[i].Topic, delivered[i].Partition.Value, delivered[i].Offset.Value);
+        }
+
+        // One line per batch, not per message. At ingestion volume, logging
+        // each event would cost more than producing it.
+        _logger.LogInformation(
+            "Published batch of {Count} to {Topic} across partition(s) [{Partitions}]",
+            results.Length, topic, string.Join(", ", results.Select(r => r.Partition).Distinct().Order()));
+
+        return results;
+    }
+
+    private static Message<string, byte[]> BuildMessage<TPayload>(string partitionKey, EventEnvelope<TPayload> envelope) =>
+        new()
+        {
+            Key = partitionKey,
+            Value = EventJson.SerializeToUtf8Bytes(envelope),
+            // Duplicated from the body so a router, a monitoring tool or a
+            // dead-letter inspector can work without deserialising anything.
+            Headers = BuildHeaders(envelope)
+        };
 
     public void Flush(TimeSpan timeout)
     {
