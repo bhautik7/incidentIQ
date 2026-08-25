@@ -1,0 +1,17 @@
+{
+  "eventId": "e0000000-0000-0000-0000-000000000005",
+  "eventType": "deployment.created",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-24T02:14:07.221+00:00",
+  "tenantId": "11111111-1111-1111-1111-111111111111",
+  "correlationId": "c0000000-0000-0000-0000-00000000c001",
+  "payload": {
+    "deploymentId": "11111111-0000-0000-0000-0000000000c1",
+    "service": "payments-api",
+    "environment": "production",
+    "version": "2.31.0",
+    "deployedAt": "2026-08-24T02:10:07.221+00:00",
+    "commitSha": "9f4c2ab7d31e05b6c8a1f2e3d4b5a6c7d8e9f001",
+    "deployedBy": "ci-pipeline"
+  }
+}

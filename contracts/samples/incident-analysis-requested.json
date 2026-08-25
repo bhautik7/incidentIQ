@@ -1,0 +1,14 @@
+{
+  "eventId": "e0000000-0000-0000-0000-000000000003",
+  "eventType": "incident.analysis.requested",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-24T02:14:07.221+00:00",
+  "tenantId": "11111111-1111-1111-1111-111111111111",
+  "correlationId": "c0000000-0000-0000-0000-00000000c001",
+  "payload": {
+    "incidentId": "11111111-0000-0000-0000-0000000000e1",
+    "analysisVersion": 1,
+    "reason": "detected",
+    "requestedAt": "2026-08-24T02:14:07.221+00:00"
+  }
+}

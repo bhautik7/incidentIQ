@@ -1,0 +1,18 @@
+{
+  "eventId": "e0000000-0000-0000-0000-000000000004",
+  "eventType": "incident.analysis.completed",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-24T02:14:07.221+00:00",
+  "tenantId": "11111111-1111-1111-1111-111111111111",
+  "correlationId": "c0000000-0000-0000-0000-00000000c001",
+  "payload": {
+    "incidentId": "11111111-0000-0000-0000-0000000000e1",
+    "analysisId": "a0000000-0000-0000-0000-000000000001",
+    "analysisVersion": 1,
+    "status": "Completed",
+    "modelName": "claude-sonnet-5",
+    "confidence": 0.870,
+    "similarIncidentCount": 3,
+    "completedAt": "2026-08-24T02:14:07.221+00:00"
+  }
+}

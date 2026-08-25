@@ -13,6 +13,7 @@ obj/
 *.user
 *.suo
 .vs/
+.vscode/
 .idea/
 TestResults/
 

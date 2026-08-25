@@ -1,4 +1,7 @@
+using IncidentIQ.Contracts;
+using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.EventProcessor;
+using IncidentIQ.Messaging;
 using IncidentIQ.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,7 +15,13 @@ builder.AddIncidentIqDefaults("incidentiq-event-processor", options =>
     options.CheckKafka = true;
 });
 
-builder.Services.AddHostedService<ProcessorWorker>();
+// Needed by the consumer to dead-letter what it cannot handle.
+builder.Services.AddIncidentIQKafkaProducer(builder.Configuration);
+
+builder.Services.AddIncidentIQKafkaConsumer<LogReceived, LogReceivedHandler>(
+    topic: Topics.LogsRaw,
+    consumerGroup: ConsumerGroups.IncidentProcessor,
+    deadLetterTopic: Topics.LogsFailed);
 
 var app = builder.Build();
 

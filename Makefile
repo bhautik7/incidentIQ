@@ -84,3 +84,13 @@ db-reset: ## Drop and recreate the local schema, then re-seed via the API
 
 db-test: ## Run the persistence integration tests (needs Docker for Testcontainers)
 	dotnet test tests/IncidentIQ.Persistence.Tests/IncidentIQ.Persistence.Tests.csproj
+
+# ---- contracts ---------------------------------------------------------
+.PHONY: contracts-samples contracts-test
+
+contracts-samples: ## Regenerate contracts/samples/*.json from the C# types
+	dotnet run --project tools/contract-samples -- contracts/samples
+
+contracts-test: ## Verify both languages agree on the wire format
+	dotnet test tests/IncidentIQ.Messaging.Tests/IncidentIQ.Messaging.Tests.csproj
+	cd $(AI) && .venv/bin/python -m pytest -q tests/test_contracts.py

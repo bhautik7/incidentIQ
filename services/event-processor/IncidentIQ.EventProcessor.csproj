@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../messaging/IncidentIQ.Messaging.csproj" />
     <ProjectReference Include="../shared/IncidentIQ.Shared.csproj" />
   </ItemGroup>
 

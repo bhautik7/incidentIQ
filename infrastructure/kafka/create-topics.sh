@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Creates the Phase 1 topic set. Idempotent: --if-not-exists means re-running
+# Creates the IncidentIQ topic set. Idempotent: --if-not-exists means re-running
 # the init container after a restart is a no-op.
 #
-# Partition counts are deliberate, not defaults. Increasing them later rehashes
-# keys and breaks per-key ordering for data already in the topic, so the main
-# topics start at 3 - enough to scale each consumer group to three instances.
+# Partition counts are deliberate, not defaults. Raising the count later
+# rehashes keys and breaks per-key ordering for data already in the topic, so
+# topics that will ever need parallel consumers start at 3.
 set -euo pipefail
 
 BOOTSTRAP="${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
@@ -20,7 +20,7 @@ done
 echo "Kafka is up."
 
 create_topic () {
-    local name="$1" partitions="$2" retention_ms="$3"
+    local name="$1" partitions="$2" retention_ms="$3" purpose="$4"
 
     kafka-topics --bootstrap-server "${BOOTSTRAP}" \
         --create --if-not-exists \
@@ -28,24 +28,33 @@ create_topic () {
         --partitions "${partitions}" \
         --replication-factor 1 \
         --config "retention.ms=${retention_ms}" \
-        --config "compression.type=lz4"
+        --config "compression.type=lz4" \
+        >/dev/null
 
-    echo "  ok: ${name} (${partitions} partition(s), retention ${retention_ms}ms)"
+    printf '  %-32s %s partition(s)  %s\n' "${name}" "${partitions}" "${purpose}"
 }
 
-# Ingested log events. Keyed by tenant:environment:service so every log line for
-# one service lands on one partition, and therefore on one consumer.
-create_topic "logs.raw"                3 "${RETENTION_7_DAYS}"
+echo
+echo "Log pipeline  (key: tenantId:service)"
+# 3 partitions: the ceiling on how many processor replicas can share the work.
+create_topic "logs.raw"                     3 "${RETENTION_7_DAYS}"  "raw events as accepted from clients"
+create_topic "logs.normalized"              3 "${RETENTION_7_DAYS}"  "masked and fingerprinted"
+# Single partition and long retention: in a healthy system this is empty, and
+# nobody triages a dead-letter queue the same day.
+create_topic "logs.failed"                  1 "${RETENTION_30_DAYS}" "dead letters; never auto-replayed"
 
-# Incident lifecycle events published by the transactional outbox.
-# Keyed by incidentId so a single incident's events stay ordered.
-create_topic "incidents.created"       3 "${RETENTION_7_DAYS}"
+echo
+echo "Deployments  (key: tenantId:service)"
+# One partition is ample - a busy organization deploys tens of times a day, not
+# thousands. Longer retention because deployment history stays useful.
+create_topic "deployments.created"          1 "${RETENTION_30_DAYS}" "releases, for incident correlation"
 
-# Dead-letter topics. Single partition (a healthy system leaves these empty)
-# and long retention, because DLQ triage is never same-day work.
-create_topic "logs.raw.dlq"            1 "${RETENTION_30_DAYS}"
-create_topic "incidents.created.dlq"   1 "${RETENTION_30_DAYS}"
+echo
+echo "Incident pipeline  (key: tenantId:incidentId)"
+create_topic "incidents.detected"           3 "${RETENTION_7_DAYS}"  "published via the transactional outbox"
+create_topic "incidents.analysis.requested" 3 "${RETENTION_7_DAYS}"  "work queue for the Python AI worker"
+create_topic "incidents.analysis.completed" 3 "${RETENTION_7_DAYS}"  "analysis results announced"
 
 echo
 echo "Topics now present:"
-kafka-topics --bootstrap-server "${BOOTSTRAP}" --list
+kafka-topics --bootstrap-server "${BOOTSTRAP}" --list | sed 's/^/  /'

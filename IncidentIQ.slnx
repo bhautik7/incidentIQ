@@ -3,6 +3,9 @@
   <Folder Name="/services/api/">
     <Project Path="services/api/IncidentIQ.Api.csproj" />
   </Folder>
+  <Folder Name="/services/contracts/">
+    <Project Path="services/contracts/IncidentIQ.Contracts.csproj" />
+  </Folder>
   <Folder Name="/services/domain/">
     <Project Path="services/domain/IncidentIQ.Domain.csproj" />
   </Folder>
@@ -12,6 +15,9 @@
   <Folder Name="/services/ingestion/">
     <Project Path="services/ingestion/IncidentIQ.Ingestion.csproj" />
   </Folder>
+  <Folder Name="/services/messaging/">
+    <Project Path="services/messaging/IncidentIQ.Messaging.csproj" />
+  </Folder>
   <Folder Name="/services/persistence/">
     <Project Path="services/persistence/IncidentIQ.Persistence.csproj" />
   </Folder>
@@ -20,6 +26,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IncidentIQ.Api.Tests/IncidentIQ.Api.Tests.csproj" />
+    <Project Path="tests/IncidentIQ.Messaging.Tests/IncidentIQ.Messaging.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Persistence.Tests/IncidentIQ.Persistence.Tests.csproj" />
   </Folder>
 </Solution>

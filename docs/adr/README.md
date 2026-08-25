@@ -13,3 +13,4 @@ new record that supersedes the old one rather than editing history.
 | [0006](0006-defer-redis-and-object-storage.md) | Provision Redis and MinIO but do not use them yet | Accepted |
 | [0007](0007-log-events-key-and-partitioning.md) | LogEvents: bigint key, sampled rows, no partitioning yet | Accepted |
 | [0008](0008-tenant-isolation-strategy.md) | Tenant isolation through composite foreign keys | Accepted |
+| [0009](0009-event-envelope-and-partition-keys.md) | A uniform event envelope, and keys that decide ordering | Accepted |

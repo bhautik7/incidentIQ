@@ -9,24 +9,21 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Restore first, on project files only, so the layer is reused whenever
-# source changes but dependencies do not. All library projects are listed
-# here regardless of whether this service references them today - it keeps the
-# three Dockerfiles identical and stops a new reference from breaking the build.
+# The whole services/ tree is copied rather than an enumerated list of project
+# files. Listing them individually caches the restore layer slightly better, but
+# it silently breaks this build every time a new library is added - which has
+# now happened twice. A NuGet cache mount buys back the speed without the
+# maintenance hazard: package downloads survive across builds even though this
+# layer is invalidated by any source change.
 COPY Directory.Build.props ./
-COPY services/domain/IncidentIQ.Domain.csproj services/domain/
-COPY services/persistence/IncidentIQ.Persistence.csproj services/persistence/
-COPY services/shared/IncidentIQ.Shared.csproj services/shared/
-COPY services/api/IncidentIQ.Api.csproj services/api/
-RUN dotnet restore services/api/IncidentIQ.Api.csproj
+COPY services/ services/
 
-COPY services/domain/ services/domain/
-COPY services/persistence/ services/persistence/
-COPY services/shared/ services/shared/
-COPY services/api/ services/api/
-RUN dotnet publish services/api/IncidentIQ.Api.csproj \
+# sharing=locked: compose builds these three images in parallel, and an
+# unlocked cache mount lets two restores extract the same package at once,
+# which corrupts it.
+RUN --mount=type=cache,id=incidentiq-nuget,target=/root/.nuget/packages,sharing=locked \
+    dotnet publish services/api/IncidentIQ.Api.csproj \
         --configuration Release \
-        --no-restore \
         --output /app/publish \
         -p:UseAppHost=false
 

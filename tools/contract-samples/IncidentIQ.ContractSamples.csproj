@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>IncidentIQ.ContractSamples</RootNamespace>
+    <AssemblyName>IncidentIQ.ContractSamples</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../services/contracts/IncidentIQ.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -273,6 +273,9 @@ services:
       Kafka__BootstrapServers: kafka:9092
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${VITE_DEV_ORIGIN:-http://localhost:5173}
+      # Synthetic event publishers used to exercise the Kafka path. Not the
+      # ingestion API, and never enabled outside local development.
+      IncidentIQ__EnableDevelopmentEndpoints: ${ENABLE_DEV_ENDPOINTS:-false}
     ports:
       - "${INGESTION_HOST_PORT:-5081}:8080"
 

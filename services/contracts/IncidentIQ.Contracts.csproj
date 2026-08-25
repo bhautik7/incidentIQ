@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Contracts</RootNamespace>
+    <AssemblyName>IncidentIQ.Contracts</AssemblyName>
+  </PropertyGroup>
+
+  <!-- No package references, and no reference to the domain. These types are
+       the wire format: they are shared with the Python worker and evolve under
+       versioning rules that internal domain entities do not have to follow.
+       Coupling them to the domain would make an innocuous refactor a breaking
+       change for another service. -->
+
+</Project>
