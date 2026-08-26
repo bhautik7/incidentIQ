@@ -5,6 +5,7 @@ using System.Text.Json;
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.Ingestion.Api;
+using IncidentIQ.Shared.Auth;
 
 namespace IncidentIQ.Ingestion.Tests;
 
@@ -212,7 +213,7 @@ public class LogBatchEndpointTests : IClassFixture<IngestionApiFactory>
                 Encoding.UTF8, "application/json")
         };
         request.Headers.Add(LogIngestionEndpoints.CorrelationIdHeader, correlationId.ToString());
-        request.Headers.Add(Auth.ApiKeyAuthenticationMiddleware.ApiKeyHeader, IngestionApiFactory.ValidApiKey);
+        request.Headers.Add(ApiKeyAuthenticationMiddleware.ApiKeyHeader, IngestionApiFactory.ValidApiKey);
 
         await client.SendAsync(request);
 

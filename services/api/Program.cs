@@ -1,5 +1,8 @@
+using IncidentIQ.Api;
+using IncidentIQ.Api.Endpoints;
 using IncidentIQ.Persistence;
 using IncidentIQ.Shared;
+using IncidentIQ.Shared.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,9 +31,26 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     });
 }
 
+// The same API-key scheme ingestion uses. A key issued to an organization can
+// read that organization's incidents and no one else's - the tenant it resolves
+// to drives EF's global query filters.
+builder.Services.AddIncidentIqApiKeyAuth(builder.Configuration, "/api/v1");
+builder.Services.AddSingleton(TimeProvider.System);
+
 var app = builder.Build();
 
+// MapIncidentIqDefaults installs CORS, so it runs first: a browser preflight
+// carries no API key, and auth running ahead of CORS would reject it before the
+// CORS middleware could short-circuit it.
 app.MapIncidentIqDefaults();
+
+// Establishes the authenticated organization...
+app.UseIncidentIqApiKeyAuth();
+
+// ...and this puts it where EF's global query filters can see it.
+app.UseMiddleware<TenantScopeMiddleware>();
+
+app.MapIncidentEndpoints();
 
 app.Run();
 

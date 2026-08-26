@@ -1,0 +1,211 @@
+2026-08-26 14:02:00.000 INFO  Starting payments-api 2.31.0 on pod payments-api-7d9f-x4k2
+2026-08-26 14:02:02.000 INFO  Connected to database, pool size 100
+2026-08-26 14:02:05.000 INFO  Health check passed
+2026-08-26 14:02:25.000 INFO  Processed payment 5500 for customer 9000 in 50ms
+2026-08-26 14:02:33.000 INFO  Processed payment 5501 for customer 9001 in 90ms
+2026-08-26 14:02:41.000 INFO  Processed payment 5502 for customer 9002 in 39ms
+2026-08-26 14:02:49.000 INFO  Processed payment 5503 for customer 9003 in 55ms
+2026-08-26 14:02:57.000 WARN  Connection pool at 82% utilisation (82/100)
+2026-08-26 14:03:02.000 WARN  Slow query detected: 1240ms for SELECT on payments
+2026-08-26 14:03:06.000 ERROR Failed to charge order 7100 for customer4000@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:09.000 ERROR Failed to charge order 7101 for customer4001@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:12.000 ERROR Failed to charge order 7102 for customer4002@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:15.000 ERROR Failed to charge order 7103 for customer4003@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:18.000 ERROR Failed to charge order 7104 for customer4004@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:21.000 ERROR Failed to charge order 7105 for customer4005@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:24.000 ERROR Failed to charge order 7106 for customer4006@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:27.000 ERROR Failed to charge order 7107 for customer4007@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:30.000 ERROR Failed to charge order 7108 for customer4008@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:33.000 ERROR Failed to charge order 7109 for customer4009@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:36.000 ERROR Failed to charge order 7110 for customer4010@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:39.000 ERROR Failed to charge order 7111 for customer4011@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:42.000 ERROR Failed to charge order 7112 for customer4012@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:45.000 ERROR Failed to charge order 7113 for customer4013@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:48.000 ERROR Failed to charge order 7114 for customer4014@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:51.000 ERROR Failed to charge order 7115 for customer4015@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:54.000 ERROR Failed to charge order 7116 for customer4016@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:03:57.000 ERROR Failed to charge order 7117 for customer4017@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:00.000 ERROR Failed to charge order 7118 for customer4018@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:03.000 ERROR Failed to charge order 7119 for customer4019@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:06.000 ERROR Failed to charge order 7120 for customer4020@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:09.000 ERROR Failed to charge order 7121 for customer4021@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:12.000 ERROR Failed to charge order 7122 for customer4022@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:15.000 ERROR Failed to charge order 7123 for customer4023@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:18.000 ERROR Failed to charge order 7124 for customer4024@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:21.000 ERROR Failed to charge order 7125 for customer4025@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:24.000 ERROR Failed to charge order 7126 for customer4026@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:27.000 ERROR Failed to charge order 7127 for customer4027@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:30.000 ERROR Failed to charge order 7128 for customer4028@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:33.000 ERROR Failed to charge order 7129 for customer4029@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:36.000 ERROR Failed to charge order 7130 for customer4030@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:39.000 ERROR Failed to charge order 7131 for customer4031@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:42.000 ERROR Failed to charge order 7132 for customer4032@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:45.000 ERROR Failed to charge order 7133 for customer4033@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:48.000 ERROR Failed to charge order 7134 for customer4034@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:51.000 ERROR Failed to charge order 7135 for customer4035@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:54.000 ERROR Failed to charge order 7136 for customer4036@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:04:57.000 ERROR Failed to charge order 7137 for customer4037@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:05:00.000 ERROR Failed to charge order 7138 for customer4038@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:05:03.000 ERROR Failed to charge order 7139 for customer4039@example.com Npgsql.NpgsqlException: The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
+   at Npgsql.PoolingDataSource.Get(NpgsqlConnection conn, TimeSpan timeout)
+   at Npgsql.NpgsqlConnection.Open()
+   at Payments.ChargeService.Charge(Order order) in /src/Payments/ChargeService.cs:line 87
+   at Payments.Api.PaymentsController.Post(ChargeRequest request)
+2026-08-26 14:05:06.000 ERROR Circuit breaker opened for payment-provider after 5 failures
+2026-08-26 14:05:08.000 INFO  Retrying in 30s

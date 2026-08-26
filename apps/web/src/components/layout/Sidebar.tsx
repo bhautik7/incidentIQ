@@ -1,0 +1,148 @@
+import { ChevronsLeft, ChevronsRight, CircleHelp, Zap } from 'lucide-react'
+import { NavLink } from 'react-router'
+
+import { NAV_GROUPS } from '../../app/navigation'
+import { useSession } from '../../app/session'
+import { cn } from '../../lib/cn'
+
+/** Counts shown against nav items. Wired to live data in a later phase. */
+export type NavBadges = Partial<Record<'activeIncidents', number>>
+
+export function Sidebar({ badges = {} }: { badges?: NavBadges }) {
+  const { sidebarCollapsed, toggleSidebar } = useSession()
+
+  return (
+    <nav
+      aria-label="Main"
+      className={cn(
+        'flex shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-150',
+        sidebarCollapsed ? 'w-14' : 'w-56',
+      )}
+    >
+      <div className="flex h-12 items-center gap-2 border-b border-line px-3">
+        <Zap size={16} className="shrink-0 text-accent" aria-hidden />
+        {!sidebarCollapsed && (
+          <span className="truncate text-[13px] font-semibold tracking-tight">IncidentIQ</span>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-2">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="mb-1">
+            {!sidebarCollapsed && (
+              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-subtle">
+                {group.label}
+              </p>
+            )}
+
+            <ul className="px-1.5">
+              {group.items.map((item) => {
+                const Icon = item.icon
+                const badge = item.badgeKey ? badges[item.badgeKey] : undefined
+
+                return (
+                  <li key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      // Only Overview needs exact matching; the rest should stay
+                      // active while on their detail pages.
+                      end={item.to === '/'}
+                      title={sidebarCollapsed ? item.label : undefined}
+                      className={({ isActive }) =>
+                        cn(
+                          'group relative flex h-7 items-center gap-2.5 rounded-[4px] px-1.5',
+                          'text-[12px] transition-quick',
+                          isActive
+                            ? 'bg-raised font-medium text-ink'
+                            : 'text-ink-muted hover:bg-raised/60 hover:text-ink',
+                          sidebarCollapsed && 'justify-center px-0',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {/* An accent bar rather than colour alone, so the
+                              active item survives a greyscale screenshot. */}
+                          {isActive && (
+                            <span
+                              aria-hidden
+                              className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r bg-accent"
+                            />
+                          )}
+                          <Icon size={14} className="shrink-0" aria-hidden />
+                          {!sidebarCollapsed && <span className="flex-1 truncate">{item.label}</span>}
+                          {!sidebarCollapsed && badge !== undefined && badge > 0 && (
+                            <span className="rounded-full bg-sev-critical/15 px-1.5 text-[10px] font-semibold text-sev-critical tabular">
+                              {badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-line p-1.5">
+        <button
+          type="button"
+          className={cn(
+            'mb-1 flex w-full items-center gap-2 rounded-[4px] px-1.5 py-1.5 text-left',
+            'transition-quick hover:bg-raised',
+            sidebarCollapsed && 'justify-center',
+          )}
+          aria-label="Switch organization"
+        >
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-[3px] bg-accent-soft text-[10px] font-semibold text-accent">
+            A
+          </span>
+          {!sidebarCollapsed && (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] text-ink">Acme Corp</span>
+              <span className="block truncate text-[10px] text-ink-subtle">Organization</span>
+            </span>
+          )}
+        </button>
+
+        <div
+          className={cn(
+            'flex items-center gap-1',
+            sidebarCollapsed ? 'flex-col' : 'justify-between',
+          )}
+        >
+          <div className={cn('flex min-w-0 items-center gap-2 px-1.5', sidebarCollapsed && 'px-0')}>
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-raised text-[10px] font-medium text-ink-muted">
+              BS
+            </span>
+            {!sidebarCollapsed && (
+              <span className="truncate text-[11px] text-ink-muted">Bhautik S.</span>
+            )}
+          </div>
+
+          <div className="flex items-center">
+            <button
+              type="button"
+              className="grid h-6 w-6 place-items-center rounded-[4px] text-ink-subtle transition-quick hover:bg-raised hover:text-ink"
+              aria-label="Help and documentation"
+            >
+              <CircleHelp size={13} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="grid h-6 w-6 place-items-center rounded-[4px] text-ink-subtle transition-quick hover:bg-raised hover:text-ink"
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-pressed={sidebarCollapsed}
+            >
+              {sidebarCollapsed ? <ChevronsRight size={13} aria-hidden /> : <ChevronsLeft size={13} aria-hidden />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  )
+}

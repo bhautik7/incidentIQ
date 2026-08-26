@@ -1,6 +1,6 @@
 using IncidentIQ.Ingestion;
 using IncidentIQ.Ingestion.Api;
-using IncidentIQ.Ingestion.Auth;
+using IncidentIQ.Shared.Auth;
 using IncidentIQ.Messaging;
 using IncidentIQ.Shared;
 using Microsoft.AspNetCore.Http.Features;
@@ -15,9 +15,7 @@ builder.AddIncidentIqDefaults("incidentiq-ingestion", options =>
 });
 
 builder.Services.Configure<IngestionOptions>(builder.Configuration.GetSection(IngestionOptions.SectionName));
-builder.Services.Configure<ApiKeyOptions>(builder.Configuration.GetSection(ApiKeyOptions.SectionName));
-
-builder.Services.AddSingleton<IApiKeyResolver, ConfiguredApiKeyResolver>();
+builder.Services.AddIncidentIqApiKeyAuth(builder.Configuration, "/api/v1/logs");
 builder.Services.AddSingleton<LogEventValidator>();
 builder.Services.AddSingleton(TimeProvider.System);
 
@@ -40,7 +38,7 @@ app.MapIncidentIqDefaults();
 
 // Order matters. Authentication first, because the rate limiter partitions by
 // the tenant it establishes.
-app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
+app.UseIncidentIqApiKeyAuth();
 app.UseRateLimiter();
 
 app.MapLogIngestionEndpoints();

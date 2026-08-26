@@ -1,8 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace IncidentIQ.Ingestion.Auth;
+namespace IncidentIQ.Shared.Auth;
 
 /// <summary>The organization a request belongs to, established from its API key.</summary>
 public sealed record TenantContext(Guid TenantId, string ApiKeyName);

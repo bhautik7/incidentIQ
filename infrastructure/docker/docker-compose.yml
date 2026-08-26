@@ -245,6 +245,11 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       IncidentIQ__LogFormat: ${LOG_FORMAT:-json}
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # The query API authenticates with the same keys as ingestion, so a key
+      # issued to an organization reads only that organization's incidents.
+      Ingestion__ApiKeys__Keys__0__KeyHash: ${INGESTION_API_KEY_HASH}
+      Ingestion__ApiKeys__Keys__0__TenantId: ${INGESTION_API_KEY_TENANT_ID}
+      Ingestion__ApiKeys__Keys__0__Name: ${INGESTION_API_KEY_NAME:-local-dev}
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${VITE_DEV_ORIGIN:-http://localhost:5173}
       # Local-development convenience. In a deployed environment migrations run
@@ -348,6 +353,9 @@ services:
     environment:
       # These are read by the BROWSER, which runs on the host - so they must be
       # host-published ports, never compose service names.
+      # Readable by anyone who loads the page - acceptable for a local
+      # single-tenant dashboard, not for production.
+      WEB_API_KEY: ${WEB_API_KEY:-iiq_dev_0123456789abcdef}
       WEB_API_BASE_URL: http://localhost:${API_HOST_PORT:-5080}
       WEB_INGESTION_BASE_URL: http://localhost:${INGESTION_HOST_PORT:-5081}
       WEB_EVENT_PROCESSOR_BASE_URL: http://localhost:${EVENT_PROCESSOR_HOST_PORT:-5082}

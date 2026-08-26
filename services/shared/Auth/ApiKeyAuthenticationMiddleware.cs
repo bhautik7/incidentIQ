@@ -1,20 +1,34 @@
-using IncidentIQ.Ingestion.Api;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-namespace IncidentIQ.Ingestion.Auth;
+namespace IncidentIQ.Shared.Auth;
 
 /// <summary>
-/// Establishes tenant and correlation id for every ingestion request, before
+/// Establishes tenant and correlation id for every guarded request, before
 /// anything else runs.
 ///
 /// Runs ahead of rate limiting on purpose: the limiter partitions by tenant, so
 /// the tenant has to be known first. An unauthenticated request is cheap to
 /// reject and must not consume another organization's quota.
 /// </summary>
-public sealed class ApiKeyAuthenticationMiddleware(RequestDelegate next, ILogger<ApiKeyAuthenticationMiddleware> logger)
+public sealed class ApiKeyAuthenticationOptions
+{
+    /// <summary>
+    /// Path prefixes this middleware guards. Ingestion protects /api/v1/logs,
+    /// the query API protects everything under /api/v1 - so the prefix is a
+    /// parameter rather than a constant.
+    /// </summary>
+    public string[] ProtectedPathPrefixes { get; set; } = [];
+}
+
+public sealed class ApiKeyAuthenticationMiddleware(
+    RequestDelegate next,
+    IOptions<ApiKeyAuthenticationOptions> options,
+    ILogger<ApiKeyAuthenticationMiddleware> logger)
 {
     public const string ApiKeyHeader = "X-Api-Key";
-
-    private const string IngestionPathPrefix = "/api/v1/logs";
+    public const string CorrelationIdHeader = "X-Correlation-Id";
 
     public async Task InvokeAsync(HttpContext context, IApiKeyResolver resolver)
     {
@@ -22,9 +36,12 @@ public sealed class ApiKeyAuthenticationMiddleware(RequestDelegate next, ILogger
         // own trace; otherwise we mint one so every request has exactly one.
         var correlationId = ReadCorrelationId(context);
         context.SetCorrelationId(correlationId);
-        context.Response.Headers[LogIngestionEndpoints.CorrelationIdHeader] = correlationId.ToString();
+        context.Response.Headers[CorrelationIdHeader] = correlationId.ToString();
 
-        if (!context.Request.Path.StartsWithSegments(IngestionPathPrefix))
+        var guarded = options.Value.ProtectedPathPrefixes
+            .Any(prefix => context.Request.Path.StartsWithSegments(prefix));
+
+        if (!guarded)
         {
             await next(context);
             return;
@@ -70,7 +87,7 @@ public sealed class ApiKeyAuthenticationMiddleware(RequestDelegate next, ILogger
 
     private static Guid ReadCorrelationId(HttpContext context)
     {
-        var supplied = context.Request.Headers[LogIngestionEndpoints.CorrelationIdHeader].ToString();
+        var supplied = context.Request.Headers[CorrelationIdHeader].ToString();
 
         // A malformed value is replaced rather than rejected: refusing a whole
         // log batch over a bad trace header would be a poor trade.

@@ -1,5 +1,5 @@
 using System.Threading.RateLimiting;
-using IncidentIQ.Ingestion.Auth;
+using IncidentIQ.Shared.Auth;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 

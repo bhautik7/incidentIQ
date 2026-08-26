@@ -1,5 +1,15 @@
 export type PlatformConfig = {
   apiBaseUrl: string
+  /**
+   * API key used for read requests.
+   *
+   * Injected at container start rather than built in, but note that anything
+   * delivered to a browser is readable by whoever loads the page. That is
+   * acceptable for a single-tenant local dashboard and is NOT acceptable in
+   * production, where this should become a short-lived token issued by a login
+   * flow. Tracked as such; see the README.
+   */
+  apiKey: string
   ingestionBaseUrl: string
   eventProcessorBaseUrl: string
   aiAnalysisBaseUrl: string
@@ -21,6 +31,7 @@ const runtime = window.__INCIDENTIQ_CONFIG__ ?? {}
  */
 export const config: PlatformConfig = {
   apiBaseUrl: runtime.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5080',
+  apiKey: runtime.apiKey ?? import.meta.env.VITE_API_KEY ?? '',
   ingestionBaseUrl:
     runtime.ingestionBaseUrl ?? import.meta.env.VITE_INGESTION_BASE_URL ?? 'http://localhost:5081',
   eventProcessorBaseUrl:

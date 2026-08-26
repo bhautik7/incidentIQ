@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
-using IncidentIQ.Ingestion.Auth;
+using IncidentIQ.Shared.Auth;
 using IncidentIQ.Messaging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;

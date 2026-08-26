@@ -5,7 +5,7 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
-using IncidentIQ.Ingestion.Auth;
+using IncidentIQ.Shared.Auth;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;

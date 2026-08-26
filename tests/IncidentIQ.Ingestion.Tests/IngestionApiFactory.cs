@@ -1,4 +1,4 @@
-using IncidentIQ.Ingestion.Auth;
+using IncidentIQ.Shared.Auth;
 using IncidentIQ.Messaging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
