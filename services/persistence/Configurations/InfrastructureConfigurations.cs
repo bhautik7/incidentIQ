@@ -15,20 +15,34 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         builder.Property(x => x.AggregateType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.EventType).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Payload).HasColumnType("jsonb").IsRequired();
+        builder.Property(x => x.EventVersion).HasDefaultValue(1);
+        builder.Property(x => x.Topic).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.PartitionKey).HasMaxLength(200).IsRequired();
+        // text, not jsonb: jsonb re-serialises on write and would not return
+        // the bytes that were committed. See OutboxMessage.Payload.
+        builder.Property(x => x.Payload).HasColumnType("text").IsRequired();
         builder.Property(x => x.Headers).HasColumnType("jsonb");
         builder.Property(x => x.AttemptCount).HasDefaultValue(0);
         builder.Property(x => x.LastError).HasColumnType("text");
 
-        // The publisher's only query: oldest unpublished first, with
-        // FOR UPDATE SKIP LOCKED so several replicas can drain it concurrently.
-        // Partial, so the index contains only the backlog - typically a handful
-        // of rows - no matter how many millions have already been published.
-        builder.HasIndex(x => x.CreatedAt)
-            .HasFilter("published_at IS NULL")
+        // The publisher's only query: pending, not given up on, and due.
+        // Partial, so the index holds just the backlog - typically a handful of
+        // rows - however many millions have already been published.
+        builder.HasIndex(x => new { x.NextAttemptAt, x.Id })
+            .HasFilter("published_at IS NULL AND dead_lettered_at IS NULL")
             .HasDatabaseName("ix_outbox_messages_pending");
 
-        // No foreign key to organizations. The outbox must remain writable and
+        // Enqueueing is idempotent: a retried command that recomputes the same
+        // event id cannot queue the same event twice.
+        builder.HasIndex(x => x.EventId).IsUnique();
+
+        // Finding everything one action caused, across services.
+        builder.HasIndex(x => x.CorrelationId);
+
+        // Dead letters are an alert, so they need to be cheap to find.
+        builder.HasIndex(x => x.DeadLetteredAt).HasFilter("dead_lettered_at IS NOT NULL");
+
+        // No foreign key to organizations. The outbox must stay writable and
         // drainable even while the rows it references are being reorganised,
         // and its retention is driven by publication, not by the aggregate's life.
     }

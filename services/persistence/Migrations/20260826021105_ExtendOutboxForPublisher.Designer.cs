@@ -3,6 +3,7 @@ using System;
 using IncidentIQ.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace IncidentIQ.Persistence.Migrations
 {
     [DbContext(typeof(IncidentIQDbContext))]
-    partial class IncidentIQDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826021105_ExtendOutboxForPublisher")]
+    partial class ExtendOutboxForPublisher
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -896,7 +899,7 @@ namespace IncidentIQ.Persistence.Migrations
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("jsonb")
                         .HasColumnName("payload");
 
                     b.Property<DateTimeOffset?>("PublishedAt")

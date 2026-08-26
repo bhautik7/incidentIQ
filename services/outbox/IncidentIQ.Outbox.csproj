@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Outbox</RootNamespace>
+    <AssemblyName>IncidentIQ.Outbox</AssemblyName>
+  </PropertyGroup>
+
+  <!-- The one component that legitimately bridges storage and transport.
+       Kept out of both so neither has to depend on the other. -->
+  <ItemGroup>
+    <ProjectReference Include="../messaging/IncidentIQ.Messaging.csproj" />
+    <ProjectReference Include="../persistence/IncidentIQ.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="IncidentIQ.Outbox.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="prometheus-net" Version="8.2.1" />
+  </ItemGroup>
+
+</Project>

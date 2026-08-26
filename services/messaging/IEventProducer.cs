@@ -37,6 +37,21 @@ public interface IEventProducer
         IReadOnlyList<KeyedEvent<TPayload>> messages,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Publishes bytes that were serialised earlier, without re-serialising.
+    ///
+    /// Exists for the transactional outbox, which stores the finished envelope
+    /// and must send it byte-identically on every attempt. Rebuilding the
+    /// envelope at publish time would let the wire format drift between the
+    /// commit and the send.
+    /// </summary>
+    Task<PublishResult> PublishRawAsync(
+        string topic,
+        string partitionKey,
+        byte[] payload,
+        IReadOnlyDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Blocks until every buffered message has been delivered. Called during shutdown.</summary>
     void Flush(TimeSpan timeout);
 }

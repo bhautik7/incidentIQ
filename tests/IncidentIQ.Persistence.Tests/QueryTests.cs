@@ -224,10 +224,15 @@ public class QueryTests(PostgresFixture fixture)
     private static OutboxMessage NewOutboxMessage(DateTimeOffset? publishedAt) => new()
     {
         OrganizationId = SeedIds.Acme.OrganizationId,
+        EventId = Guid.CreateVersion7(),
+        CorrelationId = Guid.CreateVersion7(),
         AggregateType = "Incident",
         AggregateId = SeedIds.Acme.IncidentId,
-        EventType = "IncidentCreated",
+        EventType = "incident.detected",
+        Topic = "incidents.detected",
+        PartitionKey = $"{SeedIds.Acme.OrganizationId:D}:{SeedIds.Acme.IncidentId:D}",
         Payload = """{"incidentId":"11111111-0000-0000-0000-0000000000e1"}""",
+        OccurredAt = DateTimeOffset.UtcNow,
         PublishedAt = publishedAt
     };
 }

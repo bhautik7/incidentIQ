@@ -18,6 +18,9 @@
   <Folder Name="/services/messaging/">
     <Project Path="services/messaging/IncidentIQ.Messaging.csproj" />
   </Folder>
+  <Folder Name="/services/outbox/">
+    <Project Path="services/outbox/IncidentIQ.Outbox.csproj" />
+  </Folder>
   <Folder Name="/services/persistence/">
     <Project Path="services/persistence/IncidentIQ.Persistence.csproj" />
   </Folder>
@@ -29,6 +32,7 @@
     <Project Path="tests/IncidentIQ.EventProcessor.Tests/IncidentIQ.EventProcessor.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Ingestion.Tests/IncidentIQ.Ingestion.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Messaging.Tests/IncidentIQ.Messaging.Tests.csproj" />
+    <Project Path="tests/IncidentIQ.Outbox.Tests/IncidentIQ.Outbox.Tests.csproj" />
     <Project Path="tests/IncidentIQ.Persistence.Tests/IncidentIQ.Persistence.Tests.csproj" />
   </Folder>
 </Solution>

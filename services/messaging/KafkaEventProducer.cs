@@ -116,6 +116,36 @@ public sealed class KafkaEventProducer : IEventProducer, IDisposable
         return results;
     }
 
+    public async Task<PublishResult> PublishRawAsync(
+        string topic,
+        string partitionKey,
+        byte[] payload,
+        IReadOnlyDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(topic);
+        ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
+
+        var message = new Message<string, byte[]>
+        {
+            Key = partitionKey,
+            Value = payload,
+            Headers = []
+        };
+
+        if (headers is not null)
+        {
+            foreach (var (name, value) in headers)
+            {
+                message.Headers.Add(new Header(name, Encoding.UTF8.GetBytes(value)));
+            }
+        }
+
+        var result = await _producer.ProduceAsync(topic, message, cancellationToken);
+
+        return new PublishResult(result.Topic, result.Partition.Value, result.Offset.Value);
+    }
+
     private static Message<string, byte[]> BuildMessage<TPayload>(string partitionKey, EventEnvelope<TPayload> envelope) =>
         new()
         {

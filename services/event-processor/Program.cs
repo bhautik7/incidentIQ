@@ -2,6 +2,7 @@ using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.EventProcessor.Processing;
 using IncidentIQ.Messaging;
+using IncidentIQ.Outbox;
 using IncidentIQ.Persistence;
 using IncidentIQ.Shared;
 
@@ -28,6 +29,10 @@ builder.Services.AddScoped<LogBatchWriter>();
 
 // Needed both to publish logs.normalized and to dead-letter what cannot be handled.
 builder.Services.AddIncidentIQKafkaProducer(builder.Configuration);
+
+// Drains outbox_messages to Kafka. Hosted here because this is the service that
+// writes incidents; any host with both a database and a producer could run it.
+builder.Services.AddIncidentIQOutbox(builder.Configuration);
 
 builder.Services.AddIncidentIQKafkaBatchConsumer<LogReceived, LogReceivedBatchHandler>(
     topic: Topics.LogsRaw,

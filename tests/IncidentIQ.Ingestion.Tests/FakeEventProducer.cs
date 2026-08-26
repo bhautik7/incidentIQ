@@ -49,6 +49,20 @@ public sealed class FakeEventProducer : IEventProducer
         return Task.FromResult<IReadOnlyList<PublishResult>>(results);
     }
 
+
+    public Task<PublishResult> PublishRawAsync(
+        string topic, string partitionKey, byte[] payload,
+        IReadOnlyDictionary<string, string>? headers = null, CancellationToken cancellationToken = default)
+    {
+        if (ThrowOnPublish is not null)
+        {
+            return Task.FromException<PublishResult>(ThrowOnPublish);
+        }
+
+        Published.Add((topic, partitionKey, System.Text.Encoding.UTF8.GetString(payload)));
+        return Task.FromResult(new PublishResult(topic, 0, Published.Count));
+    }
+
     public void Flush(TimeSpan timeout) { }
 
     public IEnumerable<EventEnvelope<TPayload>> EnvelopesOf<TPayload>() =>

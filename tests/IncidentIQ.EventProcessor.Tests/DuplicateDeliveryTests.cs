@@ -329,5 +329,14 @@ internal sealed class RecordingProducer : IEventProducer
         return Task.FromResult<IReadOnlyList<PublishResult>>(results);
     }
 
+
+    public Task<PublishResult> PublishRawAsync(
+        string topic, string partitionKey, byte[] payload,
+        IReadOnlyDictionary<string, string>? headers = null, CancellationToken cancellationToken = default)
+    {
+        Published.Add((topic, partitionKey, System.Text.Encoding.UTF8.GetString(payload)));
+        return Task.FromResult(new PublishResult(topic, 0, Published.Count));
+    }
+
     public void Flush(TimeSpan timeout) { }
 }
