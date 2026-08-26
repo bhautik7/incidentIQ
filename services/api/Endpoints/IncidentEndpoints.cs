@@ -24,6 +24,27 @@ public static class IncidentEndpoints
     private const int MaxPageSize = 100;
     private const int MaxSamples = 20;
 
+    /// <summary>
+    /// The columns the list may be ordered by, and whether each one reads
+    /// naturally largest-first.
+    ///
+    /// A whitelist rather than a passthrough: the sort key arrives from a query
+    /// string, and the set of things it is allowed to mean is small and known.
+    /// The default direction is per-column because it is what the reader
+    /// expects - severity and recency descend, names ascend - and getting it
+    /// wrong makes the first click on a header feel broken.
+    /// </summary>
+    private static readonly Dictionary<string, bool> SortColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["lastSeen"] = true,
+        ["firstSeen"] = true,
+        ["severity"] = true,
+        ["status"] = true,
+        ["occurrences"] = true,
+        ["service"] = false,
+        ["title"] = false
+    };
+
     public static IEndpointRouteBuilder MapIncidentEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/v1").WithTags("incidents");
@@ -44,6 +65,8 @@ public static class IncidentEndpoints
         [FromQuery] string? service,
         [FromQuery] string? environment,
         [FromQuery] string? search,
+        [FromQuery] string? sort,
+        [FromQuery] string? direction,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
         CancellationToken cancellationToken = default)
@@ -97,12 +120,37 @@ public static class IncidentEndpoints
             query = query.Where(i => EF.Functions.ILike(i.Title, term));
         }
 
+        var sortKey = string.IsNullOrWhiteSpace(sort) ? "lastSeen" : sort.Trim();
+
+        if (!SortColumns.TryGetValue(sortKey, out var descendsByDefault))
+        {
+            return Problem(http, StatusCodes.Status400BadRequest, "Unknown sort column",
+                $"'{sortKey}' cannot be sorted on. Expected one of: {string.Join(", ", SortColumns.Keys)}.");
+        }
+
+        bool descending;
+
+        if (string.IsNullOrWhiteSpace(direction))
+        {
+            descending = descendsByDefault;
+        }
+        else if (direction.Equals("desc", StringComparison.OrdinalIgnoreCase))
+        {
+            descending = true;
+        }
+        else if (direction.Equals("asc", StringComparison.OrdinalIgnoreCase))
+        {
+            descending = false;
+        }
+        else
+        {
+            return Problem(http, StatusCodes.Status400BadRequest, "Unknown sort direction",
+                $"'{direction}' is not a direction. Expected asc or desc.");
+        }
+
         var totalCount = await query.CountAsync(cancellationToken);
 
-        // Most recently active first. An incident that stopped an hour ago
-        // matters less than one still firing, whatever their severities.
-        var items = await query
-            .OrderByDescending(i => i.LastSeenAt)
+        var items = await ApplySort(query, sortKey, descending)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(i => new IncidentListItem
@@ -135,6 +183,57 @@ public static class IncidentEndpoints
             TotalCount = totalCount
         });
     }
+
+    /// <summary>
+    /// Orders the list, then makes the order total.
+    ///
+    /// Severity and status are persisted as strings, so letting the database
+    /// order them would sort alphabetically - Critical, High, Low, Medium -
+    /// which is not severity at all. Both are ranked explicitly here; the
+    /// ternary chains translate to a SQL CASE.
+    ///
+    /// The trailing sort on Id is not cosmetic. Every sortable column has
+    /// duplicates (many incidents share a severity), and a non-total order
+    /// leaves the database free to return tied rows differently between two
+    /// queries - which with offset paging means a row appearing on both page
+    /// one and page two while another is never shown at all.
+    /// </summary>
+    private static IOrderedQueryable<Incident> ApplySort(
+        IQueryable<Incident> query, string sortKey, bool descending)
+    {
+        var ordered = sortKey.ToLowerInvariant() switch
+        {
+            "firstseen" => Order(query, i => i.FirstSeenAt, descending),
+            "occurrences" => Order(query, i => i.OccurrenceCount, descending),
+            "service" => Order(query, i => i.MonitoredService.Key, descending),
+            "title" => Order(query, i => i.Title, descending),
+
+            "severity" => Order(query, i =>
+                i.Severity == IncidentSeverity.Critical ? 3
+                : i.Severity == IncidentSeverity.High ? 2
+                : i.Severity == IncidentSeverity.Medium ? 1
+                : 0, descending),
+
+            // Ranked by how much attention the status is asking for, which is
+            // the only ordering of a status that means anything to someone
+            // working a queue.
+            "status" => Order(query, i =>
+                i.Status == IncidentStatus.Detected ? 3
+                : i.Status == IncidentStatus.Investigating ? 2
+                : i.Status == IncidentStatus.Resolved ? 1
+                : 0, descending),
+
+            // Most recently active first. An incident that stopped an hour ago
+            // matters less than one still firing, whatever their severities.
+            _ => Order(query, i => i.LastSeenAt, descending)
+        };
+
+        return ordered.ThenByDescending(i => i.Id);
+    }
+
+    private static IOrderedQueryable<Incident> Order<TKey>(
+        IQueryable<Incident> query, System.Linq.Expressions.Expression<Func<Incident, TKey>> key, bool descending) =>
+        descending ? query.OrderByDescending(key) : query.OrderBy(key);
 
     private static async Task<IResult> GetIncidentAsync(
         [FromServices] IncidentIQDbContext db,

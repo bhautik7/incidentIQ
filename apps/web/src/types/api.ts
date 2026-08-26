@@ -53,6 +53,13 @@ export interface ServiceHealth {
   errorSeries: number[]
 }
 
+/** The service picker's options, from GET /api/v1/services. */
+export interface ServiceSummary {
+  key: string
+  displayName: string
+  activeIncidents: number
+}
+
 export interface IncidentListItem {
   id: string
   title: string

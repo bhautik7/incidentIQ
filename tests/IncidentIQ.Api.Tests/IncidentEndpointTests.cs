@@ -28,8 +28,14 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
     private static readonly Guid Acme = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Globex = new("22222222-2222-2222-2222-222222222222");
 
+    // Ordering cannot be proven against a single row, and the two tenants above
+    // hold exactly one incident each precisely so the isolation tests can assert
+    // Single. Sorting therefore gets a tenant of its own.
+    private static readonly Guid Initech = new("33333333-3333-3333-3333-333333333333");
+
     private const string AcmeKey = "iiq_test_acme_key";
     private const string GlobexKey = "iiq_test_globex_key";
+    private const string InitechKey = "iiq_test_initech_key";
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16")
         .WithDatabase("incidentiq_api_test")
@@ -58,6 +64,8 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
             "NpgsqlException: connection pool exhausted", IncidentSeverity.Critical, withAnalysis: true);
         _globexIncidentId = await SeedAsync(db, Globex, "globex", "shipping-api",
             "TimeoutException: carrier lookup timed out", IncidentSeverity.Medium, withAnalysis: false);
+
+        await SeedSortFixtureAsync(db);
     }
 
     public async Task DisposeAsync()
@@ -92,6 +100,11 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
                 ["Ingestion:ApiKeys:Keys:1:TenantId"] = Globex.ToString(),
                 ["Ingestion:ApiKeys:Keys:1:Name"] = "globex",
                 ["Ingestion:ApiKeys:Keys:1:IsActive"] = "true",
+
+                ["Ingestion:ApiKeys:Keys:2:KeyHash"] = ConfiguredApiKeyResolver.Hash(InitechKey),
+                ["Ingestion:ApiKeys:Keys:2:TenantId"] = Initech.ToString(),
+                ["Ingestion:ApiKeys:Keys:2:Name"] = "initech",
+                ["Ingestion:ApiKeys:Keys:2:IsActive"] = "true",
             }));
         }
     }
@@ -167,6 +180,76 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
         db.ChangeTracker.Clear();
 
         return incidentId;
+    }
+
+    /// <summary>
+    /// A tenant with four incidents that disagree on every sortable column, so
+    /// each ordering has a different correct answer and a sort that silently
+    /// does nothing cannot pass.
+    ///
+    /// Severity is stored as a string, so the alphabetical order of the four
+    /// values (Critical, High, Low, Medium) is deliberately not the severity
+    /// order. A sort that fell through to the database's default collation
+    /// would put Low second, and these tests would catch it.
+    /// </summary>
+    private static async Task SeedSortFixtureAsync(IncidentIQDbContext db)
+    {
+        var environmentId = Guid.CreateVersion7();
+        var now = DateTimeOffset.UtcNow;
+
+        db.Organizations.Add(new Organization { Id = Initech, Name = "initech", Slug = "initech" });
+        db.Environments.Add(new Environment
+        {
+            Id = environmentId, OrganizationId = Initech, Key = "production",
+            DisplayName = "Production", IsProduction = true
+        });
+
+        // title, service, severity, status, minutes since last seen, occurrences
+        //
+        // Service keys run in reverse alphabetical order against the titles, so
+        // a sort that quietly ignored the column would return the title order
+        // and be caught. The three Medium/Detected rows exist to create real
+        // ties, which is the only way to exercise the tiebreaker.
+        var rows = new[]
+        {
+            ("Alpha pool exhausted", "zulu-api", IncidentSeverity.Low, IncidentStatus.Resolved, 1, 9000L),
+            ("Bravo lookup timeout", "yankee-api", IncidentSeverity.Critical, IncidentStatus.Ignored, 2, 40L),
+            ("Charlie queue backlog", "xray-api", IncidentSeverity.Medium, IncidentStatus.Detected, 3, 700L),
+            ("Delta cache miss storm", "whiskey-api", IncidentSeverity.High, IncidentStatus.Investigating, 4, 15L),
+            ("Echo disk pressure", "victor-api", IncidentSeverity.Medium, IncidentStatus.Detected, 5, 300L),
+            ("Foxtrot retry storm", "uniform-api", IncidentSeverity.Medium, IncidentStatus.Detected, 6, 120L)
+        };
+
+        foreach (var (title, serviceKey, severity, status, minutesAgo, occurrences) in rows)
+        {
+            var serviceId = Guid.CreateVersion7();
+            var incidentId = Guid.CreateVersion7();
+
+            db.MonitoredServices.Add(new MonitoredService
+            { Id = serviceId, OrganizationId = Initech, Key = serviceKey, DisplayName = serviceKey });
+
+            db.Incidents.Add(new Incident
+            {
+                Id = incidentId, OrganizationId = Initech, MonitoredServiceId = serviceId,
+                EnvironmentId = environmentId, DedupeKey = $"fp:{incidentId}",
+                DetectionRule = DetectionRule.CountThreshold, Title = title,
+                Status = status, Severity = severity, OccurrenceCount = occurrences,
+                FirstSeenAt = now.AddMinutes(-minutesAgo - 30), LastSeenAt = now.AddMinutes(-minutesAgo)
+            });
+        }
+
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+    }
+
+    /// <summary>One field of the sort fixture, in the order the endpoint returned it.</summary>
+    private async Task<List<string>> SortedFieldAsync(string query, string field = "title")
+    {
+        var body = await Client(InitechKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents?status=all&{query}");
+
+        return body.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty(field).GetString()!)
+            .ToList();
     }
 
     private HttpClient Client(string? apiKey)
@@ -321,6 +404,132 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("Detected", await response.Content.ReadAsStringAsync());
+    }
+
+    // ---------------- Sorting ----------------
+
+    [Fact]
+    public async Task The_default_order_is_most_recently_active_first()
+    {
+        // No sort parameter at all: the queue's default question is "what is
+        // still firing", so recency leads.
+        Assert.Equal(
+            ["Alpha pool exhausted", "Bravo lookup timeout", "Charlie queue backlog",
+             "Delta cache miss storm", "Echo disk pressure", "Foxtrot retry storm"],
+            await SortedFieldAsync(string.Empty));
+    }
+
+    [Fact]
+    public async Task Sorting_by_severity_ranks_the_enum_rather_than_the_stored_string()
+    {
+        // The failure this guards against is real: severity is a string column,
+        // so an unranked ORDER BY yields Critical, High, Low, Medium - putting
+        // the least urgent incident second.
+        Assert.Equal(
+            ["Critical", "High", "Medium", "Medium", "Medium", "Low"],
+            await SortedFieldAsync("sort=severity", "severity"));
+
+        Assert.Equal(
+            ["Low", "Medium", "Medium", "Medium", "High", "Critical"],
+            await SortedFieldAsync("sort=severity&direction=asc", "severity"));
+    }
+
+    [Fact]
+    public async Task Sorting_by_status_ranks_by_how_much_attention_it_wants()
+    {
+        Assert.Equal(
+            ["Detected", "Detected", "Detected", "Investigating", "Resolved", "Ignored"],
+            await SortedFieldAsync("sort=status", "status"));
+    }
+
+    [Fact]
+    public async Task Sorting_by_occurrences_is_numeric()
+    {
+        // 9000 before 700 before 120 before 40. Lexical ordering of the same
+        // values would put 120 first.
+        Assert.Equal(
+            ["Alpha pool exhausted", "Charlie queue backlog", "Echo disk pressure",
+             "Foxtrot retry storm", "Bravo lookup timeout", "Delta cache miss storm"],
+            await SortedFieldAsync("sort=occurrences"));
+    }
+
+    [Fact]
+    public async Task Sorting_by_service_ascends_by_default_because_names_read_that_way()
+    {
+        Assert.Equal(
+            ["uniform-api", "victor-api", "whiskey-api", "xray-api", "yankee-api", "zulu-api"],
+            await SortedFieldAsync("sort=service", "service"));
+    }
+
+    [Fact]
+    public async Task Sorting_by_first_seen_is_a_real_column_and_not_an_alias_for_last_seen()
+    {
+        Assert.Equal(
+            ["Foxtrot retry storm", "Echo disk pressure", "Delta cache miss storm",
+             "Charlie queue backlog", "Bravo lookup timeout", "Alpha pool exhausted"],
+            await SortedFieldAsync("sort=firstSeen&direction=asc"));
+    }
+
+    [Fact]
+    public async Task Sort_keys_and_directions_are_case_insensitive()
+    {
+        Assert.Equal(
+            await SortedFieldAsync("sort=severity&direction=asc"),
+            await SortedFieldAsync("sort=SEVERITY&direction=ASC"));
+    }
+
+    [Fact]
+    public async Task Paging_a_sort_with_tied_rows_repeats_nothing_and_loses_nothing()
+    {
+        // Three incidents share the status Detected. Without a total order the
+        // database may break that tie differently per query, which with offset
+        // paging shows one row on both page one and page two while another is
+        // never shown at all.
+        var seen = new List<Guid>();
+
+        for (var page = 1; page <= 3; page++)
+        {
+            var body = await Client(InitechKey).GetFromJsonAsync<JsonElement>(
+                $"/api/v1/incidents?status=all&sort=status&pageSize=2&page={page}");
+
+            seen.AddRange(body.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetGuid()));
+        }
+
+        Assert.Equal(6, seen.Count);
+        Assert.Equal(6, seen.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task An_unknown_sort_column_is_a_400_that_lists_the_valid_ones()
+    {
+        var response = await Client(InitechKey).GetAsync("/api/v1/incidents?sort=drop%20table");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("severity", body);
+        Assert.Contains("lastSeen", body);
+    }
+
+    [Fact]
+    public async Task An_unknown_sort_direction_is_a_400()
+    {
+        var response = await Client(InitechKey).GetAsync("/api/v1/incidents?sort=severity&direction=sideways");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sorting_does_not_widen_what_a_tenant_can_see()
+    {
+        // Ordering rewrites the query, which is exactly the kind of change that
+        // can drop a global filter without anyone noticing.
+        var body = await Client(AcmeKey)
+            .GetFromJsonAsync<JsonElement>("/api/v1/incidents?status=all&sort=severity");
+
+        var incident = Assert.Single(body.GetProperty("items").EnumerateArray().ToList());
+        Assert.Equal(_acmeIncidentId, incident.GetProperty("id").GetGuid());
     }
 
     // ---------------- Overview aggregations ----------------

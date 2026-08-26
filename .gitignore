@@ -15,6 +15,7 @@ obj/
 .vs/
 .vscode/
 .idea/
+.claude/
 TestResults/
 
 # ---- Node ----
