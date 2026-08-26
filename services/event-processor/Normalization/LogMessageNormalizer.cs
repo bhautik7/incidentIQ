@@ -33,6 +33,7 @@ public static partial class LogMessageNormalizer
     public const string Url = "{URL}";
     public const string Path = "{PATH}";
     public const string Hex = "{HEX}";
+    public const string Token = "{TOKEN}";
     public const string Number = "{NUM}";
 
     /// <summary>Longest sensible message to normalise; beyond this the tail is dropped.</summary>
@@ -51,6 +52,21 @@ public static partial class LogMessageNormalizer
         // the ones above it: a UUID contains digits, a timestamp contains
         // numbers and colons, an IP is four numbers. Broad rules must run last
         // or they will shred the values the specific rules were going to catch.
+        // Credentials first, and before every broad rule.
+        //
+        // These were originally left to the hex rule, which cannot match them:
+        // a JWT contains characters outside [0-9a-f], so "session=eyJhbGci..."
+        // survived masking untouched. That is not only a leak - it means every
+        // request carries a different template, so one failure fingerprints as
+        // thousands of distinct patterns and never collapses into an incident.
+        // Order within this group matters as much as the group's position.
+        // The assignment rule must run after JWT (so a bare JWT is already a
+        // placeholder) but its value class excludes '{', so it cannot match
+        // and re-wrap a placeholder the previous rule just wrote.
+        text = JwtPattern().Replace(text, Token);
+        text = CredentialAssignmentPattern().Replace(text, $"$1$2{Token}");
+        text = BearerPattern().Replace(text, $"Bearer {Token}");
+
         text = UuidPattern().Replace(text, Uuid);
         text = TimestampPattern().Replace(text, Timestamp);
         text = EmailPattern().Replace(text, Email);
@@ -64,6 +80,36 @@ public static partial class LogMessageNormalizer
         // indentation between runs, and that difference is not information.
         return WhitespacePattern().Replace(text, " ").Trim();
     }
+
+    /// <summary>
+    /// JSON web tokens. Recognisable by the "eyJ" prefix, which is base64 for
+    /// the opening of a JSON object.
+    /// </summary>
+    [GeneratedRegex(@"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}(?:\.[A-Za-z0-9_-]+)?")]
+    private static partial Regex JwtPattern();
+
+    /// <summary>A bearer token with no key name in front of it.</summary>
+    [GeneratedRegex(@"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")]
+    private static partial Regex BearerPattern();
+
+    /// <summary>
+    /// A credential-shaped assignment: a key that names a secret, followed by
+    /// an opaque value.
+    ///
+    /// The key name is kept and only the value is masked, so the template still
+    /// reads as "session={TOKEN}" rather than losing the context that makes it
+    /// diagnosable. Six characters minimum, so "auth=no" is left alone.
+    ///
+    /// An optional "Bearer " prefix is consumed as part of the value - otherwise
+    /// "Authorization: Bearer sk-..." matches with "Bearer" as the value and
+    /// leaves the actual token exposed after the placeholder.
+    ///
+    /// The value class excludes '{' so this cannot match a placeholder written
+    /// by an earlier rule and wrap it a second time.
+    /// </summary>
+    [GeneratedRegex(
+        @"(?i)\b(token|session|secret|password|pwd|api[_-]?key|apikey|auth|authorization|access[_-]?token|refresh[_-]?token|credential)(\s*[=:]\s*)(?:Bearer\s+)?[^\s,;)\]}{]{6,}")]
+    private static partial Regex CredentialAssignmentPattern();
 
     [GeneratedRegex(@"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")]
     private static partial Regex UuidPattern();

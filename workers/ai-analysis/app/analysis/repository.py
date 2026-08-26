@@ -279,6 +279,8 @@ class AnalysisRepository:
         analysis_version: int,
         embedding: np.ndarray,
         embedding_model: str,
+        llm_model: str | None,
+        llm_latency_ms: int | None,
         summary: str,
         probable_cause: str | None,
         suggested_actions_json: str,
@@ -300,7 +302,7 @@ class AnalysisRepository:
                 confidence, latency_ms, created_at, completed_at)
             VALUES (
                 %(id)s, %(org)s, %(incident)s, %(version)s, 'Completed',
-                %(embedding)s, %(embedding_model)s, 'deterministic', %(embedding_model)s,
+                %(embedding)s, %(embedding_model)s, %(model_provider)s, %(model_name)s,
                 %(summary)s, %(probable_cause)s, %(actions)s::jsonb, %(similar)s::jsonb,
                 %(confidence)s, %(latency)s, now(), now())
             ON CONFLICT (incident_id, analysis_version) DO NOTHING
@@ -317,12 +319,20 @@ class AnalysisRepository:
                     "version": analysis_version,
                     "embedding": embedding,
                     "embedding_model": embedding_model,
+                    # Which model actually wrote the narrative. Recording the
+                    # embedding model here would misattribute LLM-written text
+                    # to a sentence transformer, and make "which model produced
+                    # this?" unanswerable after the fact.
+                    "model_provider": "anthropic" if llm_model else "deterministic",
+                    "model_name": llm_model or embedding_model,
                     "summary": summary,
                     "probable_cause": probable_cause,
                     "actions": suggested_actions_json,
                     "similar": similar_incidents_json,
                     "confidence": confidence,
-                    "latency": latency_ms,
+                    # The LLM call dominates when there is one; the pipeline
+                    # timing alone would understate it by two orders of magnitude.
+                    "latency": llm_latency_ms if llm_latency_ms is not None else latency_ms,
                 },
             )
             return await cursor.fetchone() is not None

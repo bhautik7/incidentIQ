@@ -325,6 +325,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Optional. Without it the worker still runs the full deterministic
+      # pipeline and writes template summaries.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+      LLM_MODEL: ${LLM_MODEL:-claude-opus-5}
+      LLM_EFFORT: ${LLM_EFFORT:-medium}
       CORS_ALLOWED_ORIGINS: ${WEB_ORIGIN:-http://localhost:3000},${VITE_DEV_ORIGIN:-http://localhost:5173}
     ports:
       - "${AI_ANALYSIS_HOST_PORT:-5083}:8000"

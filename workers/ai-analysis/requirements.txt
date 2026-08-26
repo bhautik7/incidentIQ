@@ -21,3 +21,6 @@ confluent-kafka==2.15.0
 sentence-transformers==5.1.2
 scikit-learn==1.7.2
 numpy==2.3.4
+
+# LLM narration (optional at runtime - the worker falls back without a key)
+anthropic==1.0.0

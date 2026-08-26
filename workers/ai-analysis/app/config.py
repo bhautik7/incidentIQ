@@ -59,6 +59,28 @@ class Settings(BaseSettings):
     #: Detection window, matching the .NET detector so both describe the same span.
     anomaly_window_minutes: int = Field(default=5, alias="ANOMALY_WINDOW_MINUTES")
 
+    # ---- LLM narration ----
+    #
+    # Off unless a key is present. Every deployment without one keeps the
+    # deterministic pipeline and the template summary, which is a complete
+    # product rather than a degraded one.
+
+    llm_enabled: bool = Field(default=True, alias="LLM_ENABLED")
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    llm_model: str = Field(default="claude-opus-5", alias="LLM_MODEL")
+
+    #: low | medium | high | xhigh | max. Most incidents are straightforward;
+    #: the evidence is already assembled, so the model is writing rather than
+    #: investigating.
+    llm_effort: str = Field(default="medium", alias="LLM_EFFORT")
+
+    llm_max_tokens: int = Field(default=16000, alias="LLM_MAX_TOKENS")
+
+    #: An incident narrative that arrives late is worth little. Failing fast to
+    #: the template summary beats holding a consumer partition open.
+    llm_timeout_seconds: float = Field(default=45.0, alias="LLM_TIMEOUT_SECONDS")
+    llm_max_retries: int = Field(default=2, alias="LLM_MAX_RETRIES")
+
 
     @property
     def cors_origins(self) -> list[str]:

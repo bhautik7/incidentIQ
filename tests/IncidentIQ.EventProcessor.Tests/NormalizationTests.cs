@@ -79,6 +79,41 @@ public class LogMessageNormalizerTests
         Assert.Equal("Deployed {NUM}", LogMessageNormalizer.Normalize("Deployed 2.31.0"));
     }
 
+    [Theory]
+    [InlineData("session=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTYifQ.aaa", "session={TOKEN}")]
+    [InlineData("Authorization: Bearer sk-abcdefghijklmnop123456", "Authorization: {TOKEN}")]
+    [InlineData("api_key=abcd1234efgh5678", "api_key={TOKEN}")]
+    [InlineData("password: hunter2secret", "password: {TOKEN}")]
+    [InlineData("access_token = zzzzzzzzzzzz", "access_token = {TOKEN}")]
+    public void Masks_credentials(string input, string expected)
+    {
+        // The hex rule cannot catch these: a JWT contains characters outside
+        // [0-9a-f], so they used to survive untouched.
+        Assert.Equal(expected, LogMessageNormalizer.Normalize(input));
+    }
+
+    [Fact]
+    public void Two_requests_with_different_tokens_share_a_template()
+    {
+        // The consequence that matters. An unmasked token means a different
+        // template per request, so one failure fingerprints as thousands of
+        // separate patterns and never collapses into an incident.
+        var first = LogMessageNormalizer.Normalize(
+            "Pool exhausted; session=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.aaa");
+        var second = LogMessageNormalizer.Normalize(
+            "Pool exhausted; session=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiIn0.bbb");
+
+        Assert.Equal(first, second);
+        Assert.Equal("Pool exhausted; session={TOKEN}", first);
+    }
+
+    [Fact]
+    public void Does_not_mask_a_short_non_secret_value()
+    {
+        // "auth=no" is a state, not a credential.
+        Assert.Equal("auth=no", LogMessageNormalizer.Normalize("auth=no"));
+    }
+
     [Fact]
     public void Masks_long_hex_runs()
     {

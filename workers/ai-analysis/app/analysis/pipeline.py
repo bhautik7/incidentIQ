@@ -30,6 +30,8 @@ from app.analysis.evidence import AnalysisResult, SimilarIncidentEvidence
 from app.analysis.repository import AnalysisRepository, IncidentRecord
 from app.config import Settings
 from app.embeddings import Embedder, build_incident_signature
+from app.llm.client import IncidentNarrator, LlmUnavailableError
+from app.llm.context import ContextRedactionError, build_context_package
 
 logger = structlog.get_logger(__name__)
 
@@ -39,9 +41,17 @@ class IncidentNotFoundError(Exception):
 
 
 class AnalysisPipeline:
-    def __init__(self, settings: Settings, embedder: Embedder) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        embedder: Embedder,
+        narrator: IncidentNarrator | None = None,
+    ) -> None:
         self._settings = settings
         self._embedder = embedder
+        # Injected so tests can supply a stub, and so a deployment with no API
+        # key simply never constructs one.
+        self._narrator = narrator
 
     async def run(
         self,
@@ -108,14 +118,73 @@ class AnalysisPipeline:
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
 
+        # The deterministic result is computed first and always. It is a
+        # complete answer on its own, and it is what remains if the model is
+        # unavailable, slow, or refuses.
         result.summary = _summarise(incident, result)
         result.probable_cause = candidates[0].summary if candidates else None
         result.suggested_actions = _suggest_actions(result)
         result.confidence = candidates[0].confidence if candidates else 0.0
 
+        await self._narrate(incident, result)
+
         await self._save(repository, incident, result, embedding)
 
         return result
+
+    async def _narrate(self, incident: IncidentRecord, result: AnalysisResult) -> None:
+        """Replaces the template summary with a written one, if that is possible.
+
+        Everything about this step is optional by construction. The evidence is
+        already assembled and the deterministic summary already written; this
+        only improves how it reads. Any failure leaves the incident with a
+        correct, if drier, explanation rather than none.
+        """
+        if self._narrator is None or not self._settings.llm_enabled:
+            return
+
+        package = build_context_package(
+            result=result,
+            title=incident.title,
+            service=incident.service_key,
+            environment=incident.environment_key,
+            severity=incident.severity,
+            detection_rule=incident.detection_rule,
+            total_occurrences=incident.occurrence_count,
+            first_seen_at=incident.first_seen_at,
+            last_seen_at=incident.last_seen_at,
+        )
+
+        try:
+            analysis, latency_ms = await self._narrator.narrate(package)
+        except ContextRedactionError:
+            # Not a normal failure. Something reached the boundary that should
+            # have been masked upstream, and that is worth finding.
+            logger.error(
+                "llm_skipped_redaction",
+                incident_id=incident.id,
+                reason="context package failed its own scan",
+            )
+            return
+        except LlmUnavailableError as exc:
+            logger.warning(
+                "llm_unavailable_using_template_summary",
+                incident_id=incident.id,
+                reason=str(exc),
+            )
+            return
+
+        result.summary = analysis.summary
+        result.probable_cause = analysis.probable_cause
+        result.suggested_actions = analysis.suggested_actions or result.suggested_actions
+        result.llm_model = self._settings.llm_model
+        result.llm_latency_ms = latency_ms
+
+        # The model sees only the incident's own evidence, so its confidence is
+        # about that evidence alone. The deterministic confidence knows about
+        # similar past incidents the package deliberately excludes, so the
+        # lower of the two is the honest one to publish.
+        result.confidence = min(result.confidence, analysis.confidence) if result.confidence else analysis.confidence
 
     async def _analyse_anomaly(self, repository: AnalysisRepository, incident: IncidentRecord):
         """Scores the incident's rate against the pattern's own history."""
@@ -184,6 +253,8 @@ class AnalysisPipeline:
             analysis_version=result.analysis_version,
             embedding=embedding,
             embedding_model=self._settings.embedding_model,
+            llm_model=result.llm_model,
+            llm_latency_ms=result.llm_latency_ms,
             summary=result.summary,
             probable_cause=result.probable_cause,
             suggested_actions_json=json.dumps(result.suggested_actions),

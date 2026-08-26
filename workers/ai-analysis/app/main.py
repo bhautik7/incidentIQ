@@ -27,6 +27,7 @@ from app.config import Settings, get_settings
 from app.db import Database
 from app.embeddings import Embedder, SentenceTransformerEmbedder, build_incident_signature
 from app.health import run_readiness_checks
+from app.llm.client import IncidentNarrator
 from app.logging_config import configure_logging
 from app.messaging.kafka import EventProducer
 from app.worker import AnalysisWorker
@@ -70,7 +71,21 @@ async def lifespan(app: FastAPI):
             )
             runtime.model_ready = True
 
-            runtime.pipeline = AnalysisPipeline(settings, runtime.embedder)
+            # The narrator is built only when a key is configured. Without
+            # one the worker runs the full deterministic pipeline and writes
+            # template summaries, which is a complete product rather than a
+            # degraded one.
+            narrator = None
+            if settings.llm_enabled and settings.anthropic_api_key:
+                narrator = IncidentNarrator(settings)
+                log.info("llm_narration_enabled", model=settings.llm_model, effort=settings.llm_effort)
+            else:
+                log.info(
+                    "llm_narration_disabled",
+                    reason="no ANTHROPIC_API_KEY" if settings.llm_enabled else "LLM_ENABLED=false",
+                )
+
+            runtime.pipeline = AnalysisPipeline(settings, runtime.embedder, narrator)
             runtime.producer = EventProducer(settings)
             runtime.worker = AnalysisWorker(
                 settings, runtime.database, runtime.pipeline, runtime.producer

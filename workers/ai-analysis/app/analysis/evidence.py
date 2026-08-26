@@ -135,3 +135,8 @@ class AnalysisResult(_Model):
     confidence: float = 0.0
     embedding_model: str = ""
     latency_ms: int = 0
+
+    #: Set only when a model wrote the summary. Its absence is the signal that
+    #: the text below is template-generated, which the UI should say plainly.
+    llm_model: str | None = None
+    llm_latency_ms: int | None = None
