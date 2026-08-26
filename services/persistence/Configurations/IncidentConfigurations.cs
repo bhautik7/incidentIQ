@@ -111,11 +111,16 @@ public class IncidentEventConfiguration : IEntityTypeConfiguration<IncidentEvent
 public class AiAnalysisConfiguration : IEntityTypeConfiguration<AiAnalysis>
 {
     /// <summary>
-    /// Dimension of the embedding column. Fixed at the schema level because
-    /// pgvector requires it; changing model families means a new column and a
-    /// backfill, which is exactly what AnalysisVersion is for.
+    /// Dimension of the embedding column, fixed at the schema level because
+    /// pgvector requires it.
+    ///
+    /// 384 is the output width of all-MiniLM-L6-v2, the local
+    /// sentence-transformers model the AI worker runs. This number is not a
+    /// preference: it must equal whatever the model emits, or every insert
+    /// fails. Changing model families means a new column and a backfill, which
+    /// is what AnalysisVersion exists to track.
     /// </summary>
-    public const int EmbeddingDimensions = 1536;
+    public const int EmbeddingDimensions = 384;
 
     public void Configure(EntityTypeBuilder<AiAnalysis> builder)
     {

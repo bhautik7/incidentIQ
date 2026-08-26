@@ -19,8 +19,25 @@ RUN apt-get update \
 WORKDIR /app
 
 # Dependencies first so the layer survives source changes.
+#
+# torch is installed from PyTorch's CPU index before anything else asks for it.
+# The default PyPI wheel bundles CUDA and is several gigabytes; this worker runs
+# embeddings on CPU and never touches a GPU, so the CUDA build is pure weight.
 COPY requirements.txt ./
-RUN pip install --requirement requirements.txt
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.9.1 \
+    && pip install --requirement requirements.txt
+
+# Bake the model into the image.
+#
+# Without this the first message to arrive triggers a ~90MB download, which
+# makes the first analysis slow, ties startup to Hugging Face being reachable,
+# and means an air-gapped deployment silently never works.
+ENV HF_HOME=/opt/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/opt/huggingface \
+    HF_HUB_DISABLE_TELEMETRY=1
+ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')" \
+    && chmod -R a+rX /opt/huggingface
 
 COPY app/ ./app/
 
@@ -33,7 +50,7 @@ ENV HOST=0.0.0.0 \
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
     CMD curl --fail --silent --show-error http://localhost:8000/health/live || exit 1
 
 CMD ["python", "-m", "app"]

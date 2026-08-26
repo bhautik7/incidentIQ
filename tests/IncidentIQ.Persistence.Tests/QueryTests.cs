@@ -213,10 +213,10 @@ public class QueryTests(PostgresFixture fixture)
         return title;
     }
 
-    /// <summary>A 1536-dimension vector with only the first two components set.</summary>
+    /// <summary>A 384-dimension vector with only the first two components set.</summary>
     private static Vector Embedding(float x, float y)
     {
-        var values = new float[1536];
+        var values = new float[384];
         values[0] = x;
         values[1] = y;
         return new Vector(values);

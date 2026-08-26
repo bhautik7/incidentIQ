@@ -192,11 +192,19 @@ public sealed class IncidentDetectionTests : IAsyncLifetime
         Assert.Equal(DetectionRule.CountThreshold, incident.DetectionRule);
         Assert.Equal($"fp:{fp}", incident.DedupeKey);
 
-        // The incident and its announcement committed together.
-        var outbox = Assert.Single(await _dbContext.OutboxMessages.AsNoTracking().IgnoreQueryFilters().ToListAsync());
-        Assert.Equal(Topics.IncidentsDetected, outbox.Topic);
-        Assert.Equal(incident.Id, outbox.AggregateId);
-        Assert.Null(outbox.PublishedAt);
+        // The incident and both its announcements committed together: one
+        // saying it happened, one asking for it to be explained.
+        var outbox = await _dbContext.OutboxMessages.AsNoTracking().IgnoreQueryFilters().ToListAsync();
+
+        Assert.Equal(2, outbox.Count);
+        Assert.All(outbox, m => Assert.Equal(incident.Id, m.AggregateId));
+        Assert.All(outbox, m => Assert.Null(m.PublishedAt));
+
+        var detected = Assert.Single(outbox, m => m.Topic == Topics.IncidentsDetected);
+        Assert.Equal(EventTypes.IncidentDetected, detected.EventType);
+
+        var analysis = Assert.Single(outbox, m => m.Topic == Topics.IncidentsAnalysisRequested);
+        Assert.Equal(EventTypes.IncidentAnalysisRequested, analysis.EventType);
 
         // And the timeline records why.
         var timeline = await _dbContext.IncidentEvents.AsNoTracking().IgnoreQueryFilters().ToListAsync();
@@ -259,8 +267,13 @@ public sealed class IncidentDetectionTests : IAsyncLifetime
         Assert.True(incident.OccurrenceCount > _options.CountThreshold,
             $"expected occurrences to accumulate, got {incident.OccurrenceCount}");
 
-        // And only the original detection was announced.
-        Assert.Single(await _dbContext.OutboxMessages.AsNoTracking().IgnoreQueryFilters().ToListAsync());
+        // And only the original detection was announced: two events for the
+        // one incident, not two per batch.
+        var outbox = await _dbContext.OutboxMessages.AsNoTracking().IgnoreQueryFilters().ToListAsync();
+
+        Assert.Equal(2, outbox.Count);
+        Assert.Single(outbox, m => m.Topic == Topics.IncidentsDetected);
+        Assert.Single(outbox, m => m.Topic == Topics.IncidentsAnalysisRequested);
     }
 
     [Fact]

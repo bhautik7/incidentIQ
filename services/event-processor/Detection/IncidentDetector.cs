@@ -189,6 +189,9 @@ public sealed class IncidentDetector(
                 cancellationToken);
 
             EnqueueDetected(organizationId, reopened, pattern, verdict, lastSeen, correlationId);
+            await EnqueueAnalysisRequestAsync(
+                organizationId, reopened, "reopened", lastSeen, correlationId, cancellationToken);
+
             IncidentsReopened.Inc();
 
             logger.LogInformation(
@@ -248,6 +251,8 @@ public sealed class IncidentDetector(
             cancellationToken);
 
         EnqueueDetected(organizationId, incidentId, pattern, verdict, lastSeen, correlationId);
+        await EnqueueAnalysisRequestAsync(
+            organizationId, incidentId, "detected", lastSeen, correlationId, cancellationToken);
 
         IncidentsOpened.WithLabels(verdict.Rule.ToString(), verdict.Severity.ToString()).Inc();
 
@@ -296,6 +301,53 @@ public sealed class IncidentDetector(
             EventId = envelope.EventId,
             CorrelationId = envelope.CorrelationId,
             OccurredAt = lastSeen
+        });
+    }
+
+    /// <summary>
+    /// Asks the AI worker to analyse this incident.
+    ///
+    /// A separate event from IncidentDetected, and separate on purpose:
+    /// analysis is also requested for incidents detected long ago - when a
+    /// model is upgraded, or a failed analysis is retried. Overloading the
+    /// detection event would make "re-analyse this" indistinguishable from
+    /// "this just happened".
+    ///
+    /// Enqueued through the outbox in the same transaction as the incident, so
+    /// an incident can never exist that nothing was asked to explain.
+    /// </summary>
+    private async Task EnqueueAnalysisRequestAsync(
+        Guid organizationId, Guid incidentId, string reason,
+        DateTimeOffset occurredAt, Guid correlationId, CancellationToken cancellationToken)
+    {
+        var version = await store.NextAnalysisVersionAsync(incidentId, cancellationToken);
+
+        var envelope = EventEnvelope<IncidentAnalysisRequested>.Create(
+            EventTypes.IncidentAnalysisRequested,
+            organizationId,
+            new IncidentAnalysisRequested
+            {
+                IncidentId = incidentId,
+                AnalysisVersion = version,
+                Reason = reason,
+                RequestedAt = occurredAt
+            },
+            correlationId);
+
+        outbox.Enqueue(new OutboxEnqueueRequest
+        {
+            OrganizationId = organizationId,
+            AggregateType = "Incident",
+            AggregateId = incidentId,
+            EventType = EventTypes.IncidentAnalysisRequested,
+            Topic = Topics.IncidentsAnalysisRequested,
+            // Same key as every other event about this incident, so its
+            // lifecycle stays ordered on one partition.
+            PartitionKey = PartitionKeys.ForIncident(organizationId, incidentId),
+            SerialisedEnvelope = EventJson.Serialize(envelope),
+            EventId = envelope.EventId,
+            CorrelationId = envelope.CorrelationId,
+            OccurredAt = occurredAt
         });
     }
 

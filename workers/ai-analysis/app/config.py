@@ -28,6 +28,37 @@ class Settings(BaseSettings):
     postgres_dsn: str | None = Field(default=None, alias="POSTGRES_DSN")
     kafka_bootstrap_servers: str | None = Field(default=None, alias="KAFKA_BOOTSTRAP_SERVERS")
 
+    # ---- Analysis worker ----
+
+    analysis_enabled: bool = Field(default=True, alias="ANALYSIS_ENABLED")
+    kafka_consumer_group: str = Field(default="ai-enricher", alias="KAFKA_CONSUMER_GROUP")
+
+    #: Local sentence-transformers model. Chosen for size and speed rather than
+    #: peak quality: 22M parameters, ~90MB, runs on CPU in single-digit
+    #: milliseconds, and needs no API key and no network at inference time.
+    embedding_model: str = Field(default="sentence-transformers/all-MiniLM-L6-v2", alias="EMBEDDING_MODEL")
+
+    #: Must equal the model's output width and the vector(N) column. Not a
+    #: preference - a mismatch fails every insert.
+    embedding_dimensions: int = Field(default=384, alias="EMBEDDING_DIMENSIONS")
+
+    #: How many historical incidents the similarity search returns.
+    similarity_top_k: int = Field(default=5, alias="SIMILARITY_TOP_K")
+
+    #: Below this cosine similarity a match is noise. Showing a 0.2-similar
+    #: incident as "related" is worse than showing nothing, because it teaches
+    #: people to ignore the section.
+    similarity_min_score: float = Field(default=0.55, alias="SIMILARITY_MIN_SCORE")
+
+    #: How far back to look for a deployment that could explain an incident.
+    deployment_correlation_minutes: int = Field(default=60, alias="DEPLOYMENT_CORRELATION_MINUTES")
+
+    #: Minute buckets used as the anomaly baseline.
+    anomaly_baseline_minutes: int = Field(default=180, alias="ANOMALY_BASELINE_MINUTES")
+
+    #: Detection window, matching the .NET detector so both describe the same span.
+    anomaly_window_minutes: int = Field(default=5, alias="ANOMALY_WINDOW_MINUTES")
+
 
     @property
     def cors_origins(self) -> list[str]:

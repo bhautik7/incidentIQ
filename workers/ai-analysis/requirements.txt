@@ -9,7 +9,15 @@ structlog==25.5.0
 
 # Observability
 prometheus-fastapi-instrumentator==7.1.0
+prometheus-client==0.24.1
 
-# Infrastructure clients (used by readiness checks now, by the pipeline in Phase 3)
-psycopg[binary]==3.2.12
+# Infrastructure clients
+psycopg[binary,pool]==3.2.12
+pgvector==0.4.1
 confluent-kafka==2.15.0
+
+# Analysis. torch comes from the CPU index (see Dockerfile): the CUDA build is
+# several gigabytes and this worker never touches a GPU.
+sentence-transformers==5.1.2
+scikit-learn==1.7.2
+numpy==2.3.4

@@ -359,6 +359,27 @@ public sealed class IncidentDetectionStore(IncidentIQDbContext dbContext)
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// The next analysis version for an incident.
+    ///
+    /// A reopened incident is a different problem from the one that was
+    /// analysed before it was resolved, so it gets its own version rather than
+    /// silently colliding with the previous analysis's unique key.
+    /// </summary>
+    public async Task<int> NextAnalysisVersionAsync(Guid incidentId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT COALESCE(MAX(analysis_version), 0) + 1
+            FROM ai_analyses
+            WHERE incident_id = @incident;
+            """;
+
+        await using var command = Command(sql);
+        command.Parameters.AddWithValue("incident", incidentId);
+
+        return (int)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
     private static int SeverityRank(IncidentSeverity severity) => severity switch
     {
         IncidentSeverity.Critical => 4,
