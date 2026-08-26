@@ -21,7 +21,7 @@ public class QueryTests(PostgresFixture fixture)
         // Matches ix_incidents_organization_id_status_last_seen_at.
         var board = await dbContext.Incidents
             .AsNoTracking()
-            .Where(i => i.Status == IncidentStatus.Open)
+            .Where(i => i.Status == IncidentStatus.Detected)
             .OrderByDescending(i => i.LastSeenAt)
             .Select(i => new
             {
@@ -188,6 +188,7 @@ public class QueryTests(PostgresFixture fixture)
             MonitoredServiceId = SeedIds.Acme.PaymentsApiId,
             EnvironmentId = SeedIds.Acme.ProductionId,
             LogPatternId = SeedIds.Acme.PoolPatternId,
+            DedupeKey = $"fp:{SeedIds.Acme.PoolPatternId}",
             Title = title,
             Status = IncidentStatus.Resolved,
             Severity = IncidentSeverity.High,

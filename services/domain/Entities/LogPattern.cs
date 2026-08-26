@@ -58,6 +58,15 @@ public class LogPattern : ITenantScoped, IAuditable
     /// <summary>Muted patterns are still counted but never open an incident.</summary>
     public bool IsMuted { get; set; }
 
+    /// <summary>
+    /// The HTTP status this pattern represents, when it represents one.
+    ///
+    /// Recorded on the pattern rather than only on each event so the
+    /// server-error spike rule can sum minute buckets for 5xx patterns with a
+    /// join, instead of scanning events it deliberately does not store.
+    /// </summary>
+    public int? HttpStatusCode { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

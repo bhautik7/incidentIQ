@@ -25,6 +25,7 @@ public sealed record ProcessedLogEvent
     public string? SpanId { get; init; }
     public string? Host { get; init; }
     public string? PropertiesJson { get; init; }
+    public int? HttpStatusCode { get; init; }
 }
 
 public sealed record BatchWriteResult(
@@ -183,23 +184,28 @@ public sealed class LogBatchWriter(IncidentIQDbContext dbContext, ILogger<LogBat
             INSERT INTO log_patterns (
                 id, organization_id, monitored_service_id, environment_id, fingerprint,
                 level, exception_type, message_template, sample_message, top_stack_frames,
-                occurrence_count, first_seen_at, last_seen_at, is_muted, created_at, updated_at)
+                occurrence_count, first_seen_at, last_seen_at, is_muted, http_status_code,
+                created_at, updated_at)
             SELECT
                 t.id, t.org, t.service, t.env, t.fingerprint,
                 t.level, t.exception_type, t.template, t.sample, t.frames,
-                t.count, t.first_seen, t.last_seen, false, now(), now()
+                t.count, t.first_seen, t.last_seen, false, t.http_status,
+                now(), now()
             FROM unnest(
                 @ids, @orgs, @services, @envs, @fingerprints,
                 @levels, @exception_types, @templates, @samples, @frames,
-                @counts, @first_seen, @last_seen
+                @counts, @first_seen, @last_seen, @http_statuses
             ) AS t(
                 id, org, service, env, fingerprint,
                 level, exception_type, template, sample, frames,
-                count, first_seen, last_seen)
+                count, first_seen, last_seen, http_status)
             ON CONFLICT (organization_id, fingerprint) DO UPDATE SET
                 occurrence_count = log_patterns.occurrence_count + EXCLUDED.occurrence_count,
                 first_seen_at    = LEAST(log_patterns.first_seen_at, EXCLUDED.first_seen_at),
                 last_seen_at     = GREATEST(log_patterns.last_seen_at, EXCLUDED.last_seen_at),
+                -- Keep the first status seen: a pattern's status does not change,
+                -- and COALESCE backfills one that arrived without it.
+                http_status_code = COALESCE(log_patterns.http_status_code, EXCLUDED.http_status_code),
                 updated_at       = now()
             RETURNING id, fingerprint, occurrence_count;
             """;
@@ -218,6 +224,7 @@ public sealed class LogBatchWriter(IncidentIQDbContext dbContext, ILogger<LogBat
         AddArray(command, "counts", NpgsqlDbType.Bigint, grouped.Select(g => g.Count).ToArray());
         AddArray(command, "first_seen", NpgsqlDbType.TimestampTz, grouped.Select(g => g.FirstSeen).ToArray());
         AddArray(command, "last_seen", NpgsqlDbType.TimestampTz, grouped.Select(g => g.LastSeen).ToArray());
+        AddArray(command, "http_statuses", NpgsqlDbType.Integer, grouped.Select(g => (object?)g.First.HttpStatusCode ?? DBNull.Value).ToArray());
 
         var increments = grouped.ToDictionary(g => g.Fingerprint, g => g.Count);
         var result = new Dictionary<string, PatternRow>(StringComparer.Ordinal);

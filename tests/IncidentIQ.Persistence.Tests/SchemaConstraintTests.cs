@@ -17,15 +17,22 @@ public class SchemaConstraintTests(PostgresFixture fixture)
     {
         await using var dbContext = fixture.CreateDbContext(SeedIds.Acme.OrganizationId);
 
-        // The seeded pattern already has an Open incident. This models the race
-        // where two consumer replicas both decide to open one.
-        dbContext.Incidents.Add(NewIncident(SeedIds.Acme.PoolPatternId, IncidentStatus.Open));
+        // The seeded pattern already has an active incident. Reusing its exact
+        // dedupe key is what models the race: two detector replicas deciding to
+        // open an incident for the same problem.
+        var existing = await dbContext.Incidents
+            .AsNoTracking()
+            .FirstAsync(i => i.LogPatternId == SeedIds.Acme.PoolPatternId);
+
+        var duplicate = NewIncident(SeedIds.Acme.PoolPatternId, IncidentStatus.Detected);
+        duplicate.DedupeKey = existing.DedupeKey;
+        dbContext.Incidents.Add(duplicate);
 
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync());
         var postgres = Assert.IsType<PostgresException>(error.InnerException);
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
-        Assert.Equal("ux_incidents_active_pattern", postgres.ConstraintName);
+        Assert.Equal("ux_incidents_active_dedupe_key", postgres.ConstraintName);
     }
 
     [Fact]
@@ -33,7 +40,7 @@ public class SchemaConstraintTests(PostgresFixture fixture)
     {
         await using var dbContext = fixture.CreateDbContext(SeedIds.Acme.OrganizationId);
 
-        var first = NewIncident(SeedIds.Acme.TimeoutPatternId, IncidentStatus.Open);
+        var first = NewIncident(SeedIds.Acme.TimeoutPatternId, IncidentStatus.Detected);
         dbContext.Incidents.Add(first);
         await dbContext.SaveChangesAsync();
 
@@ -41,13 +48,13 @@ public class SchemaConstraintTests(PostgresFixture fixture)
         first.ResolvedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync();
 
-        // The partial index only covers Open and Acknowledged, so the same
+        // The partial index only covers Detected and Investigating, so the same
         // problem recurring next week becomes a new incident rather than an error.
-        dbContext.Incidents.Add(NewIncident(SeedIds.Acme.TimeoutPatternId, IncidentStatus.Open));
+        dbContext.Incidents.Add(NewIncident(SeedIds.Acme.TimeoutPatternId, IncidentStatus.Detected));
         await dbContext.SaveChangesAsync();
 
         Assert.Equal(1, await dbContext.Incidents
-            .CountAsync(i => i.LogPatternId == SeedIds.Acme.TimeoutPatternId && i.Status == IncidentStatus.Open));
+            .CountAsync(i => i.LogPatternId == SeedIds.Acme.TimeoutPatternId && i.Status == IncidentStatus.Detected));
     }
 
     [Fact]
@@ -103,7 +110,7 @@ public class SchemaConstraintTests(PostgresFixture fixture)
     {
         await using var dbContext = fixture.CreateDbContext(SeedIds.Acme.OrganizationId);
 
-        var incident = NewIncident(Guid.NewGuid(), IncidentStatus.Open);
+        var incident = NewIncident(Guid.NewGuid(), IncidentStatus.Detected);
         incident.LogPatternId = SeedIds.Acme.PoolPatternId;
         incident.Status = IncidentStatus.Ignored; // keeps clear of the active-pattern index
         dbContext.Incidents.Add(incident);
@@ -159,6 +166,7 @@ public class SchemaConstraintTests(PostgresFixture fixture)
         MonitoredServiceId = SeedIds.Acme.PaymentsApiId,
         EnvironmentId = SeedIds.Acme.ProductionId,
         LogPatternId = logPatternId,
+        DedupeKey = $"fp:{logPatternId}",
         Title = "test incident",
         Status = status,
         Severity = IncidentSeverity.Low,

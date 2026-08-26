@@ -22,6 +22,7 @@ public class IncidentIQDbContext(DbContextOptions<IncidentIQDbContext> options, 
     public DbSet<Deployment> Deployments => Set<Deployment>();
     public DbSet<LogEvent> LogEvents => Set<LogEvent>();
     public DbSet<LogPattern> LogPatterns => Set<LogPattern>();
+    public DbSet<LogPatternMetric> LogPatternMetrics => Set<LogPatternMetric>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<IncidentEvent> IncidentEvents => Set<IncidentEvent>();
     public DbSet<AiAnalysis> AiAnalyses => Set<AiAnalysis>();

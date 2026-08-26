@@ -46,6 +46,7 @@ public static class Topics
 public static class ConsumerGroups
 {
     public const string IncidentProcessor = "incident-processor";
+    public const string IncidentDetector = "incident-detector";
     public const string AiEnricher = "ai-enricher";
     public const string DeploymentCorrelator = "deployment-correlator";
 }

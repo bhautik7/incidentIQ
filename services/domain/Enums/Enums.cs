@@ -39,17 +39,39 @@ public enum LogEventLevel
 
 public enum IncidentStatus
 {
-    /// <summary>Newly detected, nobody has looked at it.</summary>
-    Open,
+    /// <summary>Opened by a detection rule. Nobody has looked at it yet.</summary>
+    Detected,
 
-    /// <summary>Someone has taken it; still active.</summary>
-    Acknowledged,
+    /// <summary>Someone has taken it. Still active, still counting occurrences.</summary>
+    Investigating,
 
     /// <summary>Fixed. Resolution notes feed future similarity search.</summary>
     Resolved,
 
-    /// <summary>Known and deliberately not worth acting on.</summary>
+    /// <summary>Known and deliberately not worth acting on. Occurrences stop opening incidents.</summary>
     Ignored
+}
+
+/// <summary>
+/// Which rule opened an incident. Recorded so a noisy rule can be found and
+/// tuned - without it, "why did this open?" is unanswerable after the fact.
+/// </summary>
+public enum DetectionRule
+{
+    /// <summary>Occurrences in the window crossed an absolute threshold.</summary>
+    CountThreshold,
+
+    /// <summary>The current rate is far above this pattern's own recent baseline.</summary>
+    RateSpike,
+
+    /// <summary>A burst of 5xx responses across a service, spanning fingerprints.</summary>
+    ServerErrorSpike,
+
+    /// <summary>A fingerprint never seen before appeared just after a deployment.</summary>
+    NewErrorAfterDeployment,
+
+    /// <summary>Opened by a person rather than by a rule.</summary>
+    Manual
 }
 
 public enum IncidentSeverity
@@ -65,7 +87,7 @@ public enum IncidentEventType
     Created,
     Escalated,
     SeverityChanged,
-    Acknowledged,
+    InvestigationStarted,
     Assigned,
     Commented,
     AiAnalysisCompleted,

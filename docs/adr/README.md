@@ -19,3 +19,4 @@ new record that supersedes the old one rather than editing history.
 | [0012](0012-log-fingerprinting.md) | Log fingerprinting: normalise, then hash | Accepted |
 | [0013](0013-idempotent-batch-processing.md) | At-least-once delivery with idempotent batch processing | Accepted |
 | [0014](0014-transactional-outbox.md) | Transactional outbox for integration events | Accepted |
+| [0015](0015-deterministic-incident-detection.md) | Deterministic rules before anomaly detection | Accepted |

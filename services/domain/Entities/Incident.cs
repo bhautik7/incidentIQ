@@ -26,16 +26,35 @@ public class Incident : ITenantScoped, IAuditable
     public Guid EnvironmentId { get; set; }
 
     /// <summary>
-    /// The pattern this incident is about. Phase 3 models one pattern per
-    /// incident; grouping several related patterns into one incident is a join
-    /// table added when the correlation rules that need it exist.
+    /// The pattern this incident is about, when it is about one.
+    ///
+    /// Nullable because not every detection rule is pattern-scoped: a spike of
+    /// 5xx responses across a service spans many fingerprints and belongs to
+    /// none of them.
     /// </summary>
-    public Guid LogPatternId { get; set; }
+    public Guid? LogPatternId { get; set; }
+
+    /// <summary>
+    /// What "the same active problem" means for this incident, and the reason
+    /// a burst of 4,200 errors produces one incident rather than 4,200.
+    ///
+    /// A partial unique index on (organization_id, dedupe_key) over active
+    /// statuses makes a second incident for the same key impossible to insert,
+    /// so duplicate suppression is enforced by PostgreSQL rather than by a
+    /// check-then-insert that two replicas can both pass.
+    ///
+    /// The key is rule-shaped: "fp:{fingerprint}" for pattern rules,
+    /// "svc5xx:{service}:{environment}" for the server-error spike.
+    /// </summary>
+    public string DedupeKey { get; set; } = null!;
+
+    /// <summary>Which rule opened this, so a noisy rule can be found and tuned.</summary>
+    public DetectionRule DetectionRule { get; set; } = DetectionRule.CountThreshold;
 
     /// <summary>Starts as the normalised message; replaced by the AI-written title.</summary>
     public string Title { get; set; } = null!;
 
-    public IncidentStatus Status { get; set; } = IncidentStatus.Open;
+    public IncidentStatus Status { get; set; } = IncidentStatus.Detected;
     public IncidentSeverity Severity { get; set; } = IncidentSeverity.Medium;
 
     /// <summary>Occurrences attributed to this incident, not rows in LogEvents.</summary>
@@ -44,8 +63,10 @@ public class Incident : ITenantScoped, IAuditable
     public DateTimeOffset FirstSeenAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
 
-    public DateTimeOffset? AcknowledgedAt { get; set; }
-    public Guid? AcknowledgedByUserId { get; set; }
+    /// <summary>When someone took it: the Detected -> Investigating transition.</summary>
+    public DateTimeOffset? InvestigationStartedAt { get; set; }
+
+    public Guid? InvestigatingUserId { get; set; }
 
     public DateTimeOffset? ResolvedAt { get; set; }
     public Guid? ResolvedByUserId { get; set; }
@@ -65,7 +86,7 @@ public class Incident : ITenantScoped, IAuditable
 
     public MonitoredService MonitoredService { get; set; } = null!;
     public Environment Environment { get; set; } = null!;
-    public LogPattern LogPattern { get; set; } = null!;
+    public LogPattern? LogPattern { get; set; }
     public Deployment? SuspectedDeployment { get; set; }
     public ICollection<IncidentEvent> Events { get; set; } = [];
     public ICollection<AiAnalysis> Analyses { get; set; } = [];

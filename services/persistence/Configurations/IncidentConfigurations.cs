@@ -16,19 +16,30 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
 
         builder.Property(x => x.Title).HasMaxLength(500).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.DetectionRule).HasConversion<string>().HasMaxLength(40).IsRequired();
+        builder.Property(x => x.DedupeKey).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Severity).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.OccurrenceCount).HasDefaultValue(0L);
         builder.Property(x => x.ResolutionNotes).HasColumnType("text");
 
         // The central correctness constraint: at most one ACTIVE incident per
-        // pattern. Two consumer replicas processing the same burst cannot both
-        // open one - the second insert fails and is turned into an update.
-        // Resolved and ignored incidents are excluded, so the same pattern can
-        // recur next month as a new incident.
-        builder.HasIndex(x => new { x.OrganizationId, x.LogPatternId })
+        // dedupe key. Two detector replicas processing the same burst cannot
+        // both open one - the second insert loses the race and is turned into
+        // an update of the first.
+        //
+        // Keyed on dedupe_key rather than log_pattern_id so that rules which
+        // are not pattern-scoped, such as the server-error spike, get the same
+        // guarantee. Resolved and ignored incidents are excluded, so the same
+        // problem can recur next month as a new incident.
+        builder.HasIndex(x => new { x.OrganizationId, x.DedupeKey })
             .IsUnique()
-            .HasFilter("status IN ('Open', 'Acknowledged')")
-            .HasDatabaseName("ux_incidents_active_pattern");
+            .HasFilter("status IN ('Detected', 'Investigating')")
+            .HasDatabaseName("ux_incidents_active_dedupe_key");
+
+        // Reopen-within-cooldown lookup: the most recent incident for a key,
+        // whatever its status.
+        builder.HasIndex(x => new { x.OrganizationId, x.DedupeKey, x.LastSeenAt })
+            .IsDescending(false, false, true);
 
         // The dashboard's main query: open incidents, most recent first.
         builder.HasIndex(x => new { x.OrganizationId, x.Status, x.LastSeenAt })
@@ -52,6 +63,11 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
             .HasForeignKey(x => new { x.OrganizationId, x.LogPatternId })
             .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.InvestigatingUserId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Restrict, not Cascade: deleting deployment history must never silently
         // delete the incidents that history explains.

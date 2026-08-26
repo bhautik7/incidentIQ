@@ -97,6 +97,17 @@ public sealed record LogNormalized
 
     [JsonPropertyName("timestamp")]
     public required DateTimeOffset Timestamp { get; init; }
+
+    /// <summary>
+    /// HTTP status, when the event carried one.
+    ///
+    /// Extracted during normalisation rather than left in the properties bag,
+    /// because the server-error spike rule aggregates across fingerprints and
+    /// needs a field it can sum without deserialising every payload. Additive
+    /// and optional, so older producers stay compatible.
+    /// </summary>
+    [JsonPropertyName("httpStatusCode")]
+    public int? HttpStatusCode { get; init; }
 }
 
 /// <summary>

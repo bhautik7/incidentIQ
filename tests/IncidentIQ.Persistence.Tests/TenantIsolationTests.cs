@@ -64,8 +64,9 @@ public class TenantIsolationTests(PostgresFixture fixture)
             MonitoredServiceId = SeedIds.Globex.ShippingApiId,
             EnvironmentId = SeedIds.Acme.ProductionId,
             LogPatternId = SeedIds.Acme.TimeoutPatternId,
+            DedupeKey = $"fp:{SeedIds.Acme.TimeoutPatternId}",
             Title = "cross-tenant reference that must not be possible",
-            Status = IncidentStatus.Open,
+            Status = IncidentStatus.Detected,
             Severity = IncidentSeverity.Low,
             FirstSeenAt = DateTimeOffset.UtcNow,
             LastSeenAt = DateTimeOffset.UtcNow

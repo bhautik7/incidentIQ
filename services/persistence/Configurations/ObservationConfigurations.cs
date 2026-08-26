@@ -27,6 +27,10 @@ public class LogPatternConfiguration : IEntityTypeConfiguration<LogPattern>
         // get separate patterns.
         builder.HasIndex(x => new { x.OrganizationId, x.Fingerprint }).IsUnique();
 
+        // The server-error spike rule's join: 5xx patterns for one service.
+        builder.HasIndex(x => new { x.OrganizationId, x.MonitoredServiceId, x.EnvironmentId, x.HttpStatusCode })
+            .HasFilter("http_status_code >= 500");
+
         // "Most recently active patterns for this service and environment."
         builder.HasIndex(x => new { x.OrganizationId, x.MonitoredServiceId, x.EnvironmentId, x.LastSeenAt })
             .IsDescending(false, false, false, true);
@@ -117,5 +121,33 @@ public class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
             .HasForeignKey(x => new { x.OrganizationId, x.IncidentId })
             .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
             .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class LogPatternMetricConfiguration : IEntityTypeConfiguration<LogPatternMetric>
+{
+    public void Configure(EntityTypeBuilder<LogPatternMetric> builder)
+    {
+        builder.ToTable("log_pattern_metrics");
+
+        // One row per pattern per minute; the pair is the natural key, so no
+        // surrogate is needed and the upsert has something to conflict on.
+        builder.HasKey(x => new { x.LogPatternId, x.BucketStart });
+
+        builder.Property(x => x.Count).HasDefaultValue(0L);
+
+        // The window query: this pattern, these buckets.
+        builder.HasIndex(x => new { x.OrganizationId, x.LogPatternId, x.BucketStart })
+            .IsDescending(false, false, true);
+
+        // The retention sweep, which drops buckets older than the longest
+        // baseline any rule looks at.
+        builder.HasIndex(x => x.BucketStart);
+
+        builder.HasOne(x => x.LogPattern)
+            .WithMany()
+            .HasForeignKey(x => new { x.OrganizationId, x.LogPatternId })
+            .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

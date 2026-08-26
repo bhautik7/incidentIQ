@@ -1,5 +1,6 @@
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
+using IncidentIQ.EventProcessor.Detection;
 using IncidentIQ.EventProcessor.Processing;
 using IncidentIQ.Messaging;
 using IncidentIQ.Outbox;
@@ -18,6 +19,7 @@ builder.AddIncidentIqDefaults("incidentiq-event-processor", options =>
 });
 
 builder.Services.Configure<ProcessingOptions>(builder.Configuration.GetSection(ProcessingOptions.SectionName));
+builder.Services.Configure<DetectionOptions>(builder.Configuration.GetSection(DetectionOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException(
@@ -26,6 +28,9 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddIncidentIQPersistence(connectionString);
 builder.Services.AddScoped<TopologyResolver>();
 builder.Services.AddScoped<LogBatchWriter>();
+builder.Services.AddScoped<IncidentDetectionStore>();
+builder.Services.AddScoped<IncidentLifecycleService>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 // Needed both to publish logs.normalized and to dead-letter what cannot be handled.
 builder.Services.AddIncidentIQKafkaProducer(builder.Configuration);
@@ -40,6 +45,15 @@ builder.Services.AddIncidentIQKafkaBatchConsumer<LogReceived, LogReceivedBatchHa
     deadLetterTopic: Topics.LogsFailed,
     maxBatchSize: builder.Configuration.GetValue("Processing:MaxBatchSize", 500),
     maxBatchWaitMs: builder.Configuration.GetValue("Processing:MaxBatchWaitMs", 250));
+
+// Detection is a separate consumer group on the topic the pipeline above
+// publishes, so it can be scaled, paused or replayed on its own.
+builder.Services.AddIncidentIQKafkaBatchConsumer<LogNormalized, IncidentDetector>(
+    topic: Topics.LogsNormalized,
+    consumerGroup: ConsumerGroups.IncidentDetector,
+    deadLetterTopic: Topics.LogsFailed,
+    maxBatchSize: builder.Configuration.GetValue("Detection:MaxBatchSize", 500),
+    maxBatchWaitMs: builder.Configuration.GetValue("Detection:MaxBatchWaitMs", 500));
 
 var app = builder.Build();
 

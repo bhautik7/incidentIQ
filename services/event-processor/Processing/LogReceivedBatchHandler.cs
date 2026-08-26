@@ -115,6 +115,8 @@ public sealed class LogReceivedBatchHandler(
                 envelope.TenantId, payload.Environment, payload.Service,
                 payload.ExceptionType, template, payload.StackTrace);
 
+            var httpStatus = HttpStatusExtractor.Extract(payload.Properties, payload.Message);
+
             // ---- 5. Enrich: client names become database ids ----
             var serviceId = await topology.ResolveServiceIdAsync(envelope.TenantId, payload.Service, cancellationToken);
             var environmentId = await topology.ResolveEnvironmentIdAsync(envelope.TenantId, payload.Environment, cancellationToken);
@@ -139,7 +141,8 @@ public sealed class LogReceivedBatchHandler(
                 Host = payload.Host,
                 PropertiesJson = payload.Properties is { Count: > 0 }
                     ? JsonSerializer.Serialize(payload.Properties)
-                    : null
+                    : null,
+                HttpStatusCode = httpStatus
             });
 
             normalized.Add(new KeyedEvent<LogNormalized>(
@@ -157,7 +160,8 @@ public sealed class LogReceivedBatchHandler(
                         MessageTemplate = template,
                         SampleMessage = payload.Message,
                         ExceptionType = payload.ExceptionType,
-                        Timestamp = payload.Timestamp
+                        Timestamp = payload.Timestamp,
+                        HttpStatusCode = httpStatus
                     },
                     // Carried through unchanged, so one id traces a log line
                     // from the HTTP request that accepted it to the incident it
