@@ -51,6 +51,7 @@ app.UseIncidentIqApiKeyAuth();
 app.UseMiddleware<TenantScopeMiddleware>();
 
 app.MapIncidentEndpoints();
+app.MapOverviewEndpoints();
 
 app.Run();
 

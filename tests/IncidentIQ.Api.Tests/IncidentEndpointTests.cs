@@ -323,6 +323,116 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
         Assert.Contains("Detected", await response.Content.ReadAsStringAsync());
     }
 
+    // ---------------- Overview aggregations ----------------
+    //
+    // These endpoints use raw SQL and therefore bypass EF's global query
+    // filters entirely. Tenant scoping is hand-written in every statement, so
+    // it is verified here rather than assumed.
+
+    [Fact]
+    public async Task Overview_is_scoped_to_the_calling_organization()
+    {
+        var acme = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/overview?windowMinutes=1440");
+        var globex = await Client(GlobexKey).GetFromJsonAsync<JsonElement>("/api/v1/overview?windowMinutes=1440");
+
+        Assert.Equal(1, acme.GetProperty("activeIncidents").GetProperty("value").GetDouble());
+        Assert.Equal(1, globex.GetProperty("activeIncidents").GetProperty("value").GetDouble());
+
+        // One service each. A missing organization_id predicate would show two.
+        Assert.Equal(1, acme.GetProperty("totalServices").GetInt32());
+        Assert.Equal(1, globex.GetProperty("totalServices").GetInt32());
+    }
+
+    [Fact]
+    public async Task Overview_markers_do_not_cross_organizations()
+    {
+        var acme = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/overview?windowMinutes=1440");
+        var services = acme.GetProperty("markers").EnumerateArray()
+            .Select(marker => marker.GetProperty("service").GetString())
+            .ToList();
+
+        Assert.NotEmpty(services);
+        Assert.All(services, service => Assert.Equal("payments-api", service));
+    }
+
+    [Fact]
+    public async Task Overview_returns_a_gapless_timeline()
+    {
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/overview?windowMinutes=60");
+
+        var points = body.GetProperty("timeline").EnumerateArray().ToList();
+        var bucketMinutes = body.GetProperty("bucketMinutes").GetInt32();
+
+        // One-minute buckets over an hour. Quiet periods must be zeros, not
+        // missing points - a chart that skips empty buckets compresses time.
+        Assert.Equal(1, bucketMinutes);
+        Assert.InRange(points.Count, 60, 62);
+
+        var timestamps = points.Select(p => p.GetProperty("bucketStart").GetDateTimeOffset()).ToList();
+        for (var i = 1; i < timestamps.Count; i++)
+        {
+            Assert.Equal(1, (timestamps[i] - timestamps[i - 1]).TotalMinutes);
+        }
+    }
+
+    [Theory]
+    [InlineData(30, 1)]
+    [InlineData(360, 5)]
+    [InlineData(1440, 15)]
+    [InlineData(10080, 60)]
+    [InlineData(43200, 360)]
+    public async Task Bucket_width_scales_with_the_window(int windowMinutes, int expectedBucket)
+    {
+        // A fixed width fails at both ends: 43,200 one-minute points cannot be
+        // rendered, and one-hour buckets over 15 minutes is a single bar.
+        var body = await Client(AcmeKey)
+            .GetFromJsonAsync<JsonElement>($"/api/v1/overview?windowMinutes={windowMinutes}");
+
+        Assert.Equal(expectedBucket, body.GetProperty("bucketMinutes").GetInt32());
+    }
+
+    [Fact]
+    public async Task Change_percent_is_null_rather_than_infinite_when_the_previous_window_was_zero()
+    {
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/overview?windowMinutes=1440");
+
+        // Nothing existed before the seeded data, so every delta divides by
+        // zero. Reporting "+100%" or "+Inf%" would be a lie dressed as precision.
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("activeIncidents").GetProperty("changePercent").ValueKind);
+    }
+
+    [Fact]
+    public async Task Overview_without_an_api_key_is_rejected()
+    {
+        var response = await Client(null).GetAsync("/api/v1/overview");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Service_health_is_scoped_and_derived_from_active_incidents()
+    {
+        var services = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/services/health");
+        var service = Assert.Single(services.EnumerateArray().ToList());
+
+        Assert.Equal("payments-api", service.GetProperty("key").GetString());
+        // One active Critical incident, so the service is Critical - the worst
+        // active severity drives the badge rather than an average.
+        Assert.Equal("Critical", service.GetProperty("health").GetString());
+        Assert.Equal(1, service.GetProperty("activeIncidents").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_service_with_no_active_incidents_is_healthy()
+    {
+        var services = await Client(GlobexKey).GetFromJsonAsync<JsonElement>("/api/v1/services/health");
+        var service = Assert.Single(services.EnumerateArray().ToList());
+
+        // Globex's incident is Medium, so degraded rather than critical.
+        Assert.Equal("shipping-api", service.GetProperty("key").GetString());
+        Assert.Equal("Degraded", service.GetProperty("health").GetString());
+    }
+
     [Fact]
     public async Task Page_size_is_clamped_so_one_request_cannot_ask_for_everything()
     {
