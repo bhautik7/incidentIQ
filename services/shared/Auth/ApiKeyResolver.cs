@@ -5,8 +5,19 @@ using Microsoft.Extensions.Options;
 
 namespace IncidentIQ.Shared.Auth;
 
-/// <summary>The organization a request belongs to, established from its API key.</summary>
-public sealed record TenantContext(Guid TenantId, string ApiKeyName);
+/// <summary>
+/// The organization a request belongs to, established from its API key.
+/// </summary>
+/// <param name="ActorUserId">
+/// The user this key acts as, when it is bound to one.
+///
+/// There is no login flow yet, so a key is the only principal a request has.
+/// Binding it to a real user row is what lets an action that must be
+/// attributed - resolving an incident, taking ownership - name a person
+/// truthfully instead of inventing one. Null for keys that only write logs,
+/// and an endpoint that needs an actor rejects those rather than guessing.
+/// </param>
+public sealed record TenantContext(Guid TenantId, string ApiKeyName, Guid? ActorUserId = null);
 
 public interface IApiKeyResolver
 {
@@ -23,6 +34,13 @@ public sealed class ApiKeyEntry
 
     /// <summary>Label for logs and revocation, e.g. "acme-prod-agent".</summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The user this key acts as. Optional: an ingestion-only key has no need
+    /// of one, and leaving it unset is what makes such a key unable to perform
+    /// an action that has to be attributed to somebody.
+    /// </summary>
+    public Guid? ActorUserId { get; set; }
 
     public bool IsActive { get; set; } = true;
 }
@@ -60,7 +78,7 @@ public sealed class ConfiguredApiKeyResolver : IApiKeyResolver
             .Where(k => k.IsActive && !string.IsNullOrWhiteSpace(k.KeyHash) && k.TenantId != Guid.Empty)
             .ToDictionary(
                 k => k.KeyHash.Trim().ToLowerInvariant(),
-                k => new TenantContext(k.TenantId, k.Name),
+                k => new TenantContext(k.TenantId, k.Name, k.ActorUserId),
                 StringComparer.Ordinal);
 
         if (_byHash.Count == 0)

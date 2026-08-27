@@ -33,6 +33,12 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
     // Single. Sorting therefore gets a tenant of its own.
     private static readonly Guid Initech = new("33333333-3333-3333-3333-333333333333");
 
+    // Acme's key acts as a user; Globex's deliberately does not, so the
+    // "this key cannot act as a person" path has something to exercise.
+    private static readonly Guid AcmeActor = new("11111111-0000-0000-0000-0000000000a1");
+    private static readonly Guid AcmeSecondUser = new("11111111-0000-0000-0000-0000000000a2");
+    private static readonly Guid GlobexUser = new("22222222-0000-0000-0000-0000000000b1");
+
     private const string AcmeKey = "iiq_test_acme_key";
     private const string GlobexKey = "iiq_test_globex_key";
     private const string InitechKey = "iiq_test_initech_key";
@@ -95,6 +101,7 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
                 ["Ingestion:ApiKeys:Keys:0:TenantId"] = Acme.ToString(),
                 ["Ingestion:ApiKeys:Keys:0:Name"] = "acme",
                 ["Ingestion:ApiKeys:Keys:0:IsActive"] = "true",
+                ["Ingestion:ApiKeys:Keys:0:ActorUserId"] = AcmeActor.ToString(),
 
                 ["Ingestion:ApiKeys:Keys:1:KeyHash"] = ConfiguredApiKeyResolver.Hash(GlobexKey),
                 ["Ingestion:ApiKeys:Keys:1:TenantId"] = Globex.ToString(),
@@ -121,6 +128,18 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
         var now = DateTimeOffset.UtcNow;
 
         db.Organizations.Add(new Organization { Id = tenantId, Name = slug, Slug = slug });
+
+        foreach (var (userId, email, name) in tenantId == Acme
+            ? [(AcmeActor, "ada@acme.test", "Ada Owner"), (AcmeSecondUser, "ravi@acme.test", "Ravi Responder")]
+            : new[] { (GlobexUser, "gina@globex.test", "Gina Owner") })
+        {
+            db.Users.Add(new User
+            {
+                Id = userId, OrganizationId = tenantId, Email = email,
+                DisplayName = name, Status = UserStatus.Active
+            });
+        }
+
         db.MonitoredServices.Add(new MonitoredService
         { Id = serviceId, OrganizationId = tenantId, Key = serviceKey, DisplayName = serviceKey });
         db.Environments.Add(new Environment
@@ -404,6 +423,203 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("Detected", await response.Content.ReadAsStringAsync());
+    }
+
+    // ---------------- Lifecycle actions ----------------
+
+    private static StringContent Json(string json) => new(json, System.Text.Encoding.UTF8, "application/json");
+
+    [Fact]
+    public async Task Acknowledging_takes_the_incident_and_records_who_took_it()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/acknowledge", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Investigating",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+
+        var detail = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+        Assert.Equal("Ada Owner", detail.GetProperty("owner").GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task Acknowledging_twice_is_a_409_that_names_both_states()
+    {
+        await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/acknowledge", null);
+        var second = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/acknowledge", null);
+
+        // Two people acting on the same stale screen is the common case, and
+        // the second one needs to be told what already happened.
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        var body = await second.Content.ReadAsStringAsync();
+        Assert.Contains("Investigating", body);
+        Assert.Contains("Detected", body);
+    }
+
+    [Fact]
+    public async Task A_key_not_bound_to_a_user_cannot_perform_an_attributable_action()
+    {
+        // Globex's key authenticates fine - it just is not a person, and
+        // resolving an incident has to be attributable to one.
+        var response = await Client(GlobexKey).PostAsync($"/api/v1/incidents/{_globexIncidentId}/acknowledge", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("not bound to a user", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Acting_on_another_organizations_incident_is_a_404()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_globexIncidentId}/acknowledge", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Resolving_keeps_the_resolution_notes()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/resolve",
+            Json("""{"resolutionNotes":"Raised the pool ceiling."}"""));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var detail = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+        Assert.Equal("Resolved", detail.GetProperty("incident").GetProperty("status").GetString());
+
+        var timeline = detail.GetProperty("timeline").EnumerateArray().ToList();
+        Assert.Contains(timeline, entry => entry.GetProperty("message").GetString()!.Contains("Raised the pool ceiling"));
+    }
+
+    [Fact]
+    public async Task Resolving_is_allowed_straight_from_detected()
+    {
+        // Plenty of incidents are fixed by whoever spots them, with no handover.
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/resolve", Json("{}"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Assigning_names_the_assignee_on_the_timeline()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/assign",
+            Json($$"""{"userId":"{{AcmeSecondUser}}"}"""));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var detail = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+
+        // Assignment is not a status change: it stays where it was.
+        Assert.Equal("Detected", detail.GetProperty("incident").GetProperty("status").GetString());
+        Assert.Equal("Ravi Responder", detail.GetProperty("owner").GetProperty("displayName").GetString());
+
+        var timeline = detail.GetProperty("timeline").EnumerateArray().ToList();
+        Assert.Contains(timeline, entry =>
+            entry.GetProperty("type").GetString() == "Assigned"
+            && entry.GetProperty("actorName").GetString() == "Ada Owner");
+    }
+
+    [Fact]
+    public async Task A_user_from_another_organization_cannot_be_assigned()
+    {
+        // The lookup runs through the global query filter, so a cross-tenant
+        // id does not resolve - it does not merely fail a check.
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/assign",
+            Json($$"""{"userId":"{{GlobexUser}}"}"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_note_lands_on_the_same_timeline_as_the_automated_events()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/notes",
+            Json("""{"note":"Pool saturation confirmed in pg_stat_activity."}"""));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var detail = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+        var timeline = detail.GetProperty("timeline").EnumerateArray().ToList();
+
+        var note = Assert.Single(timeline, entry => entry.GetProperty("type").GetString() == "Commented");
+        Assert.Equal("Ada Owner", note.GetProperty("actorName").GetString());
+    }
+
+    [Fact]
+    public async Task An_empty_note_is_rejected_rather_than_recorded()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/notes",
+            Json("""{"note":"   "}"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ignoring_without_a_reason_is_rejected()
+    {
+        // Ignoring is the one transition with no evidence behind it, so the
+        // reason is the entire record of why.
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/ignore", Json("{}"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Available_actions_follow_the_status()
+    {
+        var detected = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+        var beforeActions = detected.GetProperty("availableActions").EnumerateArray()
+            .Select(a => a.GetString()).ToList();
+
+        Assert.Contains("acknowledge", beforeActions);
+        Assert.DoesNotContain("reopen", beforeActions);
+
+        await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/resolve", Json("{}"));
+
+        var resolved = await Client(AcmeKey).GetFromJsonAsync<JsonElement>($"/api/v1/incidents/{_acmeIncidentId}");
+        var afterActions = resolved.GetProperty("availableActions").EnumerateArray()
+            .Select(a => a.GetString()).ToList();
+
+        Assert.Contains("reopen", afterActions);
+        Assert.DoesNotContain("acknowledge", afterActions);
+    }
+
+    [Fact]
+    public async Task Requesting_an_analysis_queues_the_next_version_through_the_outbox()
+    {
+        var response = await Client(AcmeKey).PostAsync($"/api/v1/incidents/{_acmeIncidentId}/analyze", null);
+
+        // 202: asked for, not performed.
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // The fixture already holds a completed version 1, so the next is 2.
+        Assert.Equal(2, body.GetProperty("analysisVersion").GetInt32());
+
+        var options = new DbContextOptionsBuilder<IncidentIQDbContext>()
+            .UseIncidentIQPostgres(_postgres.GetConnectionString())
+            .Options;
+
+        await using var db = new IncidentIQDbContext(options, new StaticTenantContext(Acme));
+
+        // Enqueued rather than produced: the request commits with the decision
+        // to make it, so a broker that is down delays it instead of losing it.
+        var queued = await db.OutboxMessages
+            .Where(m => m.AggregateId == _acmeIncidentId)
+            .ToListAsync();
+
+        Assert.Contains(queued, m => m.Topic == "incidents.analysis.requested");
+    }
+
+    [Fact]
+    public async Task The_member_list_does_not_cross_organizations()
+    {
+        var acme = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/users");
+        var names = acme.EnumerateArray().Select(u => u.GetProperty("displayName").GetString()).ToList();
+
+        Assert.Equal(["Ada Owner", "Ravi Responder"], names);
     }
 
     // ---------------- Sorting ----------------

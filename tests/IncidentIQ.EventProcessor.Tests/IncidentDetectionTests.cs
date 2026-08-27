@@ -3,6 +3,7 @@ using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.Domain.Entities;
 using IncidentIQ.Domain.Enums;
 using IncidentIQ.EventProcessor.Detection;
+using IncidentIQ.Incidents;
 using IncidentIQ.EventProcessor.Processing;
 using IncidentIQ.Messaging;
 using IncidentIQ.Persistence;

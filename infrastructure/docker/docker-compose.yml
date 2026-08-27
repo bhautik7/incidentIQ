@@ -250,6 +250,10 @@ services:
       Ingestion__ApiKeys__Keys__0__KeyHash: ${INGESTION_API_KEY_HASH}
       Ingestion__ApiKeys__Keys__0__TenantId: ${INGESTION_API_KEY_TENANT_ID}
       Ingestion__ApiKeys__Keys__0__Name: ${INGESTION_API_KEY_NAME:-local-dev}
+      # Binds the key to a real user, so an action that has to be attributed to
+      # a person - resolving, taking ownership - can name one. Ingestion has no
+      # such binding on purpose: writing logs is not somebody's decision.
+      Ingestion__ApiKeys__Keys__0__ActorUserId: ${API_KEY_ACTOR_USER_ID:-11111111-0000-0000-0000-000000000001}
       Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${VITE_DEV_ORIGIN:-http://localhost:5173}
       # Local-development convenience. In a deployed environment migrations run

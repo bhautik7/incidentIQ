@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../incidents/IncidentIQ.Incidents.csproj" />
     <ProjectReference Include="../messaging/IncidentIQ.Messaging.csproj" />
     <ProjectReference Include="../outbox/IncidentIQ.Outbox.csproj" />
     <ProjectReference Include="../persistence/IncidentIQ.Persistence.csproj" />

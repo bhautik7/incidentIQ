@@ -1,6 +1,7 @@
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.EventProcessor.Detection;
+using IncidentIQ.Incidents;
 using IncidentIQ.EventProcessor.Processing;
 using IncidentIQ.Messaging;
 using IncidentIQ.Outbox;

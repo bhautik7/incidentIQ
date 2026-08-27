@@ -1,14 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { TIME_RANGES, type EnvironmentKey, type TimeRangeKey } from '../../app/session'
 import type {
+  IncidentDetail,
   IncidentListItem,
+  OrganizationMember,
   OverviewResponse,
   PagedResult,
   ServiceHealth,
   ServiceSummary,
 } from '../../types/api'
-import { apiGet, toQuery } from './client'
+import { apiGet, apiPost, toQuery } from './client'
 
 export function windowMinutesFor(range: TimeRangeKey): number {
   return TIME_RANGES.find((option) => option.key === range)?.minutes ?? 1440
@@ -28,7 +30,9 @@ export const queryKeys = {
     ['services', 'health', environment, range] as const,
   incidents: (environment: EnvironmentKey, filters: object) =>
     ['incidents', environment, filters] as const,
+  incident: (id: string) => ['incident', id] as const,
   services: () => ['services'] as const,
+  members: () => ['members'] as const,
 }
 
 /**
@@ -123,5 +127,71 @@ export function useActiveIncidents(environment: EnvironmentKey, pageSize = 8) {
         signal,
       ),
     refetchInterval: 15_000,
+  })
+}
+
+/**
+ * One incident, with everything the detail page renders.
+ *
+ * Polled like the rest of the dashboard: an incident detail left open on a
+ * second monitor during an outage is exactly the screen that must not go
+ * stale, and it is where a newly completed AI analysis appears.
+ */
+export function useIncident(id: string) {
+  return useQuery({
+    queryKey: queryKeys.incident(id),
+    queryFn: ({ signal }) => apiGet<IncidentDetail>(`/api/v1/incidents/${id}`, signal),
+    refetchInterval: 15_000,
+  })
+}
+
+/** Organization members, for the assignment picker. */
+export function useMembers() {
+  return useQuery({
+    queryKey: queryKeys.members(),
+    queryFn: ({ signal }) => apiGet<OrganizationMember[]>('/api/v1/users', signal),
+    staleTime: 5 * 60_000,
+  })
+}
+
+type ActionVariables =
+  | { action: 'acknowledge' }
+  | { action: 'resolve'; resolutionNotes?: string }
+  | { action: 'ignore'; reason: string }
+  | { action: 'reopen'; reason: string }
+  | { action: 'assign'; userId: string }
+  | { action: 'notes'; note: string }
+  | { action: 'analyze' }
+
+/**
+ * Every incident action, as one mutation.
+ *
+ * One hook rather than seven because they share everything that matters: the
+ * same URL shape, the same error handling, and the same invalidation. On
+ * success the incident and any list that might contain it are both refetched -
+ * resolving an incident changes its row in the queue as well as this page, and
+ * leaving the list showing it as active is how a UI starts lying.
+ *
+ * Deliberately not optimistic. These transitions can be legitimately refused -
+ * somebody else may have resolved it a second earlier - and showing the new
+ * state before the server agrees would make a 409 look like a bug.
+ */
+export function useIncidentAction(id: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (variables: ActionVariables) => {
+      const { action, ...body } = variables
+      const path = `/api/v1/incidents/${id}/${action}`
+
+      return action === 'acknowledge' || action === 'analyze'
+        ? apiPost<unknown>(path)
+        : apiPost<unknown>(path, body)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incident(id) })
+      void queryClient.invalidateQueries({ queryKey: ['incidents'] })
+      void queryClient.invalidateQueries({ queryKey: ['overview'] })
+    },
   })
 }

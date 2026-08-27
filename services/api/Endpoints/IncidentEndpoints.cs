@@ -273,6 +273,9 @@ public static class IncidentEndpoints
                 Type = e.Type.ToString(),
                 OccurredAt = e.OccurredAt,
                 ActorType = e.ActorType.ToString(),
+                ActorName = e.ActorUserId == null
+                    ? null
+                    : db.Users.Where(u => u.Id == e.ActorUserId).Select(u => u.DisplayName).FirstOrDefault(),
                 Message = e.Message
             })
             .ToListAsync(cancellationToken);
@@ -302,9 +305,27 @@ public static class IncidentEndpoints
             })
             .ToListAsync(cancellationToken);
 
+        // Resolved separately rather than by an Include: the users table is
+        // reached from the incident only when somebody has actually taken it,
+        // which is the minority of rows.
+        var owner = incident.InvestigatingUserId is null
+            ? null
+            : await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == incident.InvestigatingUserId)
+                .Select(u => new IncidentOwner
+                {
+                    UserId = u.Id,
+                    DisplayName = u.DisplayName,
+                    Email = u.Email
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
         return Results.Ok(new IncidentDetail
         {
             Incident = ToListItem(incident, analysis),
+            Owner = owner,
+            AvailableActions = IncidentActionEndpoints.AvailableActionsFor(incident.Status),
             Pattern = incident.LogPattern is null ? null : new IncidentPattern
             {
                 Fingerprint = incident.LogPattern.Fingerprint,

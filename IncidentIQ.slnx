@@ -12,6 +12,9 @@
   <Folder Name="/services/event-processor/">
     <Project Path="services/event-processor/IncidentIQ.EventProcessor.csproj" />
   </Folder>
+  <Folder Name="/services/incidents/">
+    <Project Path="services/incidents/IncidentIQ.Incidents.csproj" />
+  </Folder>
   <Folder Name="/services/ingestion/">
     <Project Path="services/ingestion/IncidentIQ.Ingestion.csproj" />
   </Folder>

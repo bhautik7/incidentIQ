@@ -67,3 +67,49 @@ export function toQuery(params: Record<string, string | number | undefined | nul
   const query = search.toString()
   return query ? `?${query}` : ''
 }
+
+/**
+ * POST, for the handful of actions the dashboard can take.
+ *
+ * Shares ApiError with apiGet so a component handles one error shape. The
+ * status code carries the meaning the UI needs: 409 is "somebody got there
+ * first", 403 is "this key cannot act as a person", and those deserve to be
+ * said differently.
+ */
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  let response: Response
+
+  try {
+    response = await fetch(`${config.apiBaseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': config.apiKey,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError('The API could not be reached. It may be starting up or unavailable.', 0)
+  }
+
+  if (!response.ok) {
+    let detail = `Request failed with status ${response.status}.`
+    let correlationId: string | undefined
+
+    try {
+      const problem = await response.json()
+      if (problem?.detail) detail = problem.detail
+      if (problem?.correlationId) correlationId = problem.correlationId
+    } catch {
+      // Not JSON; the status stands on its own.
+    }
+
+    throw new ApiError(detail, response.status, correlationId)
+  }
+
+  if (response.status === 204) return undefined as T
+
+  // 202 Accepted may legitimately carry no body.
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}

@@ -4,7 +4,7 @@ using IncidentIQ.Domain.Enums;
 using IncidentIQ.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace IncidentIQ.EventProcessor.Detection;
+namespace IncidentIQ.Incidents;
 
 /// <summary>
 /// Raised when a transition is not legal from the incident's current state.
@@ -87,6 +87,52 @@ public sealed class IncidentLifecycleService(IncidentIQDbContext dbContext, Time
             actorUserId: userId,
             cancellationToken: cancellationToken);
 
+    /// <summary>
+    /// Hands the incident to someone, without moving it along the lifecycle.
+    ///
+    /// Assignment is not a status: an incident can be Detected and owned, or
+    /// Investigating and reassigned mid-flight. Keeping the two apart is what
+    /// lets "who has this" be answered without also claiming work has started.
+    ///
+    /// Allowed only while the incident is still active - assigning a resolved
+    /// incident to someone is asking them to do nothing.
+    /// </summary>
+    public Task<Incident> AssignAsync(
+        Guid organizationId, Guid incidentId, Guid assigneeUserId, Guid actorUserId,
+        string assigneeName, CancellationToken cancellationToken = default) =>
+        TransitionAsync(organizationId, incidentId,
+            allowedFrom: ActiveStatuses,
+            // The status is deliberately unchanged; TransitionAsync writes the
+            // event and the assignment, and "to" here is simply where it stays.
+            to: null,
+            eventType: IncidentEventType.Assigned,
+            message: $"Assigned to {assigneeName}.",
+            apply: (incident, _) => incident.InvestigatingUserId = assigneeUserId,
+            actorUserId: actorUserId,
+            cancellationToken: cancellationToken);
+
+    /// <summary>
+    /// A human note on the incident.
+    ///
+    /// Writes to the same timeline as the automated events rather than a
+    /// separate comments table, because during an incident "what did the
+    /// detector see" and "what did Ravi try" are read in one sequence, and
+    /// splitting them means reconstructing the order by eye.
+    /// </summary>
+    public Task<Incident> AddNoteAsync(
+        Guid organizationId, Guid incidentId, Guid actorUserId, string note,
+        CancellationToken cancellationToken = default) =>
+        TransitionAsync(organizationId, incidentId,
+            // A note is legal in any state. Writing down what actually fixed
+            // something, after it is resolved, is a thing people do.
+            allowedFrom: Enum.GetValues<IncidentStatus>(),
+            to: null,
+            eventType: IncidentEventType.Commented,
+            message: note,
+            apply: (_, _) => { },
+            actorUserId: actorUserId,
+            cancellationToken: cancellationToken);
+
     /// <summary>Resolved → Detected, by a person. The detector reopens automatically on recurrence.</summary>
     public Task<Incident> ReopenAsync(
         Guid organizationId, Guid incidentId, Guid userId, string reason,
@@ -123,11 +169,18 @@ public sealed class IncidentLifecycleService(IncidentIQDbContext dbContext, Time
             actorUserId: userId,
             cancellationToken: cancellationToken);
 
+    /// <summary>
+    /// Applies a change and records it, in one transaction.
+    /// </summary>
+    /// <param name="to">
+    /// The status to move to, or null for a change that records itself on the
+    /// timeline without advancing the lifecycle - an assignment or a note.
+    /// </param>
     private async Task<Incident> TransitionAsync(
         Guid organizationId,
         Guid incidentId,
         IncidentStatus[] allowedFrom,
-        IncidentStatus to,
+        IncidentStatus? to,
         IncidentEventType eventType,
         string message,
         Action<Incident, DateTimeOffset> apply,
@@ -147,12 +200,19 @@ public sealed class IncidentLifecycleService(IncidentIQDbContext dbContext, Time
             if (!allowedFrom.Contains(incident.Status))
             {
                 throw new InvalidIncidentTransitionException(
-                    $"Cannot move incident {incidentId} from {incident.Status} to {to}. "
-                    + $"Allowed from: {string.Join(", ", allowedFrom)}.");
+                    to is null
+                        ? $"Cannot record a {eventType} on incident {incidentId} while it is {incident.Status}. "
+                          + $"Allowed while: {string.Join(", ", allowedFrom)}."
+                        : $"Cannot move incident {incidentId} from {incident.Status} to {to}. "
+                          + $"Allowed from: {string.Join(", ", allowedFrom)}.");
             }
 
             var from = incident.Status;
-            incident.Status = to;
+            if (to is not null)
+            {
+                incident.Status = to.Value;
+            }
+
             apply(incident, now);
 
             dbContext.IncidentEvents.Add(new IncidentEvent
@@ -164,7 +224,10 @@ public sealed class IncidentLifecycleService(IncidentIQDbContext dbContext, Time
                 ActorType = ActorType.User,
                 ActorUserId = actorUserId,
                 Message = message,
-                Data = JsonSerializer.Serialize(new { from = from.ToString(), to = to.ToString() })
+                // A status-neutral event records the state it happened in, so
+                // the timeline still says where the incident stood at the time.
+                Data = JsonSerializer.Serialize(
+                    new { from = from.ToString(), to = (to ?? from).ToString() })
             });
 
             return incident;

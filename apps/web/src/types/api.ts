@@ -83,3 +83,113 @@ export interface PagedResult<T> {
   totalCount: number
   totalPages: number
 }
+
+// ---------------------------------------------------------------------------
+// Incident detail
+// ---------------------------------------------------------------------------
+
+export type TimelineEntryType =
+  | 'Created'
+  | 'Escalated'
+  | 'SeverityChanged'
+  | 'InvestigationStarted'
+  | 'Assigned'
+  | 'Commented'
+  | 'AiAnalysisCompleted'
+  | 'Resolved'
+  | 'Reopened'
+  | 'Ignored'
+
+export interface IncidentTimelineEntry {
+  type: TimelineEntryType
+  occurredAt: string
+  actorType: 'System' | 'User' | 'Ai'
+  /** Null for the detector's own entries - "the system noticed" is not a person. */
+  actorName: string | null
+  message: string
+}
+
+export interface IncidentPattern {
+  fingerprint: string
+  messageTemplate: string
+  /** Raw, unlike the template. Never sent to the model. */
+  sampleMessage: string | null
+  exceptionType: string | null
+  httpStatusCode: number | null
+  occurrenceCount: number
+}
+
+export interface IncidentDeployment {
+  version: string
+  deployedAt: string
+  commitSha: string | null
+  deployedBy: string | null
+  /**
+   * Minutes between the deployment and the incident's first occurrence.
+   *
+   * Signed, and the sign matters: negative means the deployment landed *after*
+   * the incident began, which is evidence against it being the cause.
+   */
+  minutesBeforeIncident: number
+}
+
+export interface SimilarIncident {
+  /** A string, not a Guid: the worker writes this jsonb and is not bound to our id type. */
+  incidentId: string
+  title: string
+  similarity: number
+  /** What fixed it last time - the whole reason a past incident is worth surfacing. */
+  resolutionNotes: string | null
+}
+
+export interface IncidentAnalysis {
+  modelProvider: string
+  modelName: string | null
+  confidence: number
+  summary: string | null
+  probableCause: string | null
+  suggestedActions: string[]
+  similarIncidents: SimilarIncident[]
+  createdAt: string
+}
+
+export interface IncidentSample {
+  occurredAt: string
+  level: string
+  message: string
+  host: string | null
+  traceId: string | null
+}
+
+export interface IncidentOwner {
+  userId: string
+  displayName: string
+  email: string
+}
+
+export type IncidentAction =
+  | 'acknowledge'
+  | 'assign'
+  | 'resolve'
+  | 'ignore'
+  | 'reopen'
+  | 'notes'
+  | 'analyze'
+
+export interface IncidentDetail {
+  incident: IncidentListItem
+  pattern: IncidentPattern | null
+  deployment: IncidentDeployment | null
+  analysis: IncidentAnalysis | null
+  timeline: IncidentTimelineEntry[]
+  samples: IncidentSample[]
+  owner: IncidentOwner | null
+  /** What the server will currently accept. An affordance, not the check. */
+  availableActions: IncidentAction[]
+}
+
+export interface OrganizationMember {
+  userId: string
+  displayName: string
+  email: string
+}

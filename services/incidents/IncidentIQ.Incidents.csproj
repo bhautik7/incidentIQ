@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IncidentIQ.Incidents</RootNamespace>
+    <AssemblyName>IncidentIQ.Incidents</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../persistence/IncidentIQ.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

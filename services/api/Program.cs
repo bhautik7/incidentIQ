@@ -1,5 +1,6 @@
 using IncidentIQ.Api;
 using IncidentIQ.Api.Endpoints;
+using IncidentIQ.Incidents;
 using IncidentIQ.Persistence;
 using IncidentIQ.Shared;
 using IncidentIQ.Shared.Auth;
@@ -29,6 +30,17 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         options.SeedReferenceData = builder.Configuration.GetValue("IncidentIQ:SeedReferenceData", false);
         options.SeedDevelopmentData = builder.Configuration.GetValue("IncidentIQ:SeedDevelopmentData", false);
     });
+
+    // Registered inside the same guard as persistence, because both depend on
+    // the DbContext. Outside it, container validation fails at startup and the
+    // service cannot even serve /health to explain that it has no database -
+    // which is the one thing it must still be able to say.
+    //
+    // The rules themselves live in the domain service; the API only exposes
+    // them. The outbox writer lets a requested analysis be committed by the
+    // same transaction that decided to ask for it.
+    builder.Services.AddScoped<IncidentLifecycleService>();
+    builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
 }
 
 // The same API-key scheme ingestion uses. A key issued to an organization can
@@ -51,6 +63,7 @@ app.UseIncidentIqApiKeyAuth();
 app.UseMiddleware<TenantScopeMiddleware>();
 
 app.MapIncidentEndpoints();
+app.MapIncidentActionEndpoints();
 app.MapOverviewEndpoints();
 
 app.Run();

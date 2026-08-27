@@ -173,6 +173,16 @@ public sealed record IncidentTimelineEntry
     [JsonPropertyName("actorType")]
     public required string ActorType { get; init; }
 
+    /// <summary>
+    /// Who did it, when a person did.
+    ///
+    /// Null for the detector's own entries, which is the distinction the
+    /// timeline is really making: "the system noticed" and "Ravi decided" are
+    /// different kinds of event and should not read alike.
+    /// </summary>
+    [JsonPropertyName("actorName")]
+    public string? ActorName { get; init; }
+
     [JsonPropertyName("message")]
     public string? Message { get; init; }
 }
@@ -216,6 +226,95 @@ public sealed record IncidentDetail
     /// <summary>A handful of real log lines. Capped - log_events is a sample, not an archive.</summary>
     [JsonPropertyName("samples")]
     public IReadOnlyList<IncidentSample> Samples { get; init; } = [];
+
+    /// <summary>Who holds this incident, or null while nobody has taken it.</summary>
+    [JsonPropertyName("owner")]
+    public IncidentOwner? Owner { get; init; }
+
+    /// <summary>
+    /// The transitions the caller may perform right now.
+    ///
+    /// Computed from the incident's status by the same rules the lifecycle
+    /// service enforces, so the UI can disable an action rather than offer it
+    /// and let the server refuse. The server still validates - this is an
+    /// affordance, not the check.
+    /// </summary>
+    [JsonPropertyName("availableActions")]
+    public IReadOnlyList<string> AvailableActions { get; init; } = [];
+}
+
+public sealed record IncidentOwner
+{
+    [JsonPropertyName("userId")]
+    public required Guid UserId { get; init; }
+
+    [JsonPropertyName("displayName")]
+    public required string DisplayName { get; init; }
+
+    [JsonPropertyName("email")]
+    public required string Email { get; init; }
+}
+
+/// <summary>A member of the organization, for the assignment picker.</summary>
+public sealed record OrganizationMember
+{
+    [JsonPropertyName("userId")]
+    public required Guid UserId { get; init; }
+
+    [JsonPropertyName("displayName")]
+    public required string DisplayName { get; init; }
+
+    [JsonPropertyName("email")]
+    public required string Email { get; init; }
+}
+
+/// <summary>What changed, so the caller can update without refetching everything.</summary>
+public sealed record IncidentActionResult
+{
+    [JsonPropertyName("id")]
+    public required Guid Id { get; init; }
+
+    [JsonPropertyName("status")]
+    public required string Status { get; init; }
+}
+
+public sealed record ResolveIncidentRequest
+{
+    /// <summary>
+    /// What actually fixed it. Optional, and worth asking for anyway: the
+    /// similarity search surfaces this to the next person who hits the same
+    /// error, and it is the most useful thing an old incident can offer.
+    /// </summary>
+    [JsonPropertyName("resolutionNotes")]
+    public string? ResolutionNotes { get; init; }
+}
+
+public sealed record ReasonRequest
+{
+    [JsonPropertyName("reason")]
+    public string? Reason { get; init; }
+}
+
+public sealed record AssignIncidentRequest
+{
+    [JsonPropertyName("userId")]
+    public required Guid UserId { get; init; }
+}
+
+public sealed record AddNoteRequest
+{
+    [JsonPropertyName("note")]
+    public required string Note { get; init; }
+}
+
+/// <summary>Confirms an analysis was queued, and which one it will be.</summary>
+public sealed record AnalyzeIncidentResult
+{
+    [JsonPropertyName("incidentId")]
+    public required Guid IncidentId { get; init; }
+
+    [JsonPropertyName("analysisVersion")]
+    public required int AnalysisVersion { get; init; }
 }
 
 /// <summary>Counts for the header. One query, so the list page costs two round trips total.</summary>
