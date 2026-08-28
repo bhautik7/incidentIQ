@@ -3,6 +3,7 @@ using System;
 using IncidentIQ.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace IncidentIQ.Persistence.Migrations
 {
     [DbContext(typeof(IncidentIQDbContext))]
-    partial class IncidentIQDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828182454_RawLogRetentionWindow")]
+    partial class RawLogRetentionWindow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

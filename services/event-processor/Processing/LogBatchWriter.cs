@@ -104,8 +104,15 @@ public sealed class LogBatchWriter(IncidentIQDbContext dbContext, ILogger<LogBat
         // 2. One upsert per distinct fingerprint, not per event.
         var patterns = await UpsertPatternsAsync(connection, transaction, fresh, cancellationToken);
 
-        // 3. Sampled occurrences only, capped per pattern.
+        // 3. Sampled occurrences only, capped per pattern. Kept forever, so an
+        //    incident opened months ago still shows real lines behind it.
         var samplesInserted = await InsertSamplesAsync(connection, transaction, fresh, patterns, cancellationToken);
+
+        // 3b. Every line, for the log explorer's short retention window. The
+        //     sample above cannot serve a search: once a pattern reaches its cap
+        //     it stops recording, so searching it returns the same twenty rows
+        //     however many million events have since gone past.
+        var rawInserted = await InsertRawAsync(connection, transaction, fresh, patterns, cancellationToken);
 
         // 4. Record what was handled, so a redelivery short-circuits at step 1.
         await RecordProcessedAsync(connection, transaction, consumerGroup, fresh, processedEventRetention, cancellationToken);
@@ -113,8 +120,9 @@ public sealed class LogBatchWriter(IncidentIQDbContext dbContext, ILogger<LogBat
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogDebug(
-            "Batch written. submitted={Submitted} duplicates={Duplicates} patterns={Patterns} samples={Samples}",
-            events.Count, alreadyProcessed.Count, patterns.Count, samplesInserted);
+            "Batch written. submitted={Submitted} duplicates={Duplicates} patterns={Patterns} "
+            + "samples={Samples} raw={Raw}",
+            events.Count, alreadyProcessed.Count, patterns.Count, samplesInserted, rawInserted);
 
         return new BatchWriteResult(events.Count, alreadyProcessed.Count, patterns.Count, samplesInserted);
     }
@@ -252,6 +260,66 @@ public sealed class LogBatchWriter(IncidentIQDbContext dbContext, ILogger<LogBat
     /// backstop. processed_events can be pruned, or a deployment can change the
     /// consumer group name; the unique index cannot be bypassed by either.
     /// </summary>
+    /// <summary>
+    /// Writes every event in the batch to the retention window.
+    ///
+    /// No ON CONFLICT clause and no unique index behind it, unlike the sample:
+    /// duplicate suppression already happened at step 1, so only genuinely new
+    /// events reach here, and enforcing uniqueness again on the
+    /// highest-volume table in the schema would tax every insert to prevent
+    /// something that cannot occur.
+    /// </summary>
+    private static async Task<int> InsertRawAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        IReadOnlyList<ProcessedLogEvent> events,
+        Dictionary<string, PatternRow> patterns,
+        CancellationToken cancellationToken)
+    {
+        if (events.Count == 0)
+        {
+            return 0;
+        }
+
+        const string sql = """
+            INSERT INTO raw_log_events (
+                organization_id, event_id, monitored_service_id, environment_id, log_pattern_id,
+                occurred_at, received_at, level, message, exception_type, stack_trace,
+                trace_id, span_id, host, properties)
+            SELECT
+                t.org, t.event_id, t.service, t.env, t.pattern,
+                t.occurred_at, t.received_at, t.level, t.message, t.exception_type, t.stack_trace,
+                t.trace_id, t.span_id, t.host, t.properties::jsonb
+            FROM unnest(
+                @orgs, @event_ids, @services, @envs, @patterns,
+                @occurred_at, @received_at, @levels, @messages, @exception_types, @stack_traces,
+                @trace_ids, @span_ids, @hosts, @properties
+            ) AS t(
+                org, event_id, service, env, pattern,
+                occurred_at, received_at, level, message, exception_type, stack_trace,
+                trace_id, span_id, host, properties);
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        AddArray(command, "orgs", NpgsqlDbType.Uuid, events.Select(e => e.OrganizationId).ToArray());
+        AddArray(command, "event_ids", NpgsqlDbType.Uuid, events.Select(e => e.LogEventId).ToArray());
+        AddArray(command, "services", NpgsqlDbType.Uuid, events.Select(e => e.MonitoredServiceId).ToArray());
+        AddArray(command, "envs", NpgsqlDbType.Uuid, events.Select(e => e.EnvironmentId).ToArray());
+        AddArray(command, "patterns", NpgsqlDbType.Uuid, events.Select(e => (object)patterns[e.Fingerprint].Id).ToArray());
+        AddArray(command, "occurred_at", NpgsqlDbType.TimestampTz, events.Select(e => e.OccurredAt).ToArray());
+        AddArray(command, "received_at", NpgsqlDbType.TimestampTz, events.Select(e => e.ReceivedAt).ToArray());
+        AddArray(command, "levels", NpgsqlDbType.Text, events.Select(e => e.Severity).ToArray());
+        AddArray(command, "messages", NpgsqlDbType.Text, events.Select(e => Truncate(e.Message, 8000)).ToArray());
+        AddArray(command, "exception_types", NpgsqlDbType.Text, events.Select(e => (object?)e.ExceptionType ?? DBNull.Value).ToArray());
+        AddArray(command, "stack_traces", NpgsqlDbType.Text, events.Select(e => (object?)e.StackTrace ?? DBNull.Value).ToArray());
+        AddArray(command, "trace_ids", NpgsqlDbType.Text, events.Select(e => (object?)e.TraceId ?? DBNull.Value).ToArray());
+        AddArray(command, "span_ids", NpgsqlDbType.Text, events.Select(e => (object?)e.SpanId ?? DBNull.Value).ToArray());
+        AddArray(command, "hosts", NpgsqlDbType.Text, events.Select(e => (object?)e.Host ?? DBNull.Value).ToArray());
+        AddArray(command, "properties", NpgsqlDbType.Text, events.Select(e => (object?)e.PropertiesJson ?? DBNull.Value).ToArray());
+
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task<int> InsertSamplesAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

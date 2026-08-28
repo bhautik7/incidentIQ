@@ -49,6 +49,75 @@ public class LogPatternConfiguration : IEntityTypeConfiguration<LogPattern>
     }
 }
 
+public class RawLogEventConfiguration : IEntityTypeConfiguration<RawLogEvent>
+{
+    public void Configure(EntityTypeBuilder<RawLogEvent> builder)
+    {
+        builder.ToTable("raw_log_events");
+
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityAlwaysColumn();
+
+        builder.Property(x => x.Level).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Message).HasMaxLength(8000).IsRequired();
+        builder.Property(x => x.ExceptionType).HasMaxLength(500);
+        builder.Property(x => x.StackTrace).HasColumnType("text");
+        builder.Property(x => x.TraceId).HasMaxLength(64);
+        builder.Property(x => x.SpanId).HasMaxLength(32);
+        builder.Property(x => x.Host).HasMaxLength(255);
+        builder.Property(x => x.Properties).HasColumnType("jsonb");
+
+        // ---- Indexes ----
+        //
+        // This is the only table that grows with traffic rather than with
+        // distinct errors, so every index here is paid for on every single log
+        // line. The set is the smallest one that serves the log explorer.
+
+        // 1. The explorer's one access path: newest first, within a tenant.
+        //    Id descends alongside occurred_at to make the order total, which
+        //    is what lets the cursor be a keyset rather than an offset - two
+        //    lines logged in the same millisecond must not be able to swap
+        //    places between pages and hide a row.
+        builder.HasIndex(x => new { x.OrganizationId, x.OccurredAt, x.Id })
+            .IsDescending(false, true, true);
+
+        // 2. Trace correlation. Partial, because most lines carry no trace id
+        //    and indexing the nulls would roughly double the index for nothing.
+        builder.HasIndex(x => new { x.OrganizationId, x.TraceId })
+            .HasFilter("trace_id IS NOT NULL");
+
+        // No index on level, and none on message. Both are low-cardinality or
+        // unindexable-by-prefix, so the planner is better served filtering rows
+        // it has already found by time than by an index maintained on every
+        // insert. EF adds its own indexes for the foreign keys below; those are
+        // kept because a cascade from a deleted service would otherwise scan
+        // the largest table in the schema.
+        //
+        // Retention is served by a BRIN index on occurred_at, created in the
+        // migration because EF cannot express one. It suits an append-only
+        // table physically ordered by time and costs a rounding error per
+        // insert, where a btree would cost more than the delete it exists for.
+
+        builder.HasOne(x => x.MonitoredService)
+            .WithMany()
+            .HasForeignKey(x => new { x.OrganizationId, x.MonitoredServiceId })
+            .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Environment)
+            .WithMany()
+            .HasForeignKey(x => new { x.OrganizationId, x.EnvironmentId })
+            .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.LogPattern)
+            .WithMany()
+            .HasForeignKey(x => new { x.OrganizationId, x.LogPatternId })
+            .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
 public class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
 {
     public void Configure(EntityTypeBuilder<LogEvent> builder)

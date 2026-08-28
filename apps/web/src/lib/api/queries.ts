@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { TIME_RANGES, type EnvironmentKey, type TimeRangeKey } from '../../app/session'
 import type {
@@ -7,6 +7,7 @@ import type {
   OrganizationMember,
   OverviewResponse,
   PagedResult,
+  LogSearchResult,
   ServiceHealth,
   ServiceSummary,
 } from '../../types/api'
@@ -32,6 +33,7 @@ export const queryKeys = {
     ['incidents', environment, filters] as const,
   incident: (id: string) => ['incident', id] as const,
   services: () => ['services'] as const,
+  logs: (environment: EnvironmentKey, filters: object) => ['logs', environment, filters] as const,
   members: () => ['members'] as const,
 }
 
@@ -193,5 +195,54 @@ export function useIncidentAction(id: string) {
       void queryClient.invalidateQueries({ queryKey: ['incidents'] })
       void queryClient.invalidateQueries({ queryKey: ['overview'] })
     },
+  })
+}
+
+/** The parameters the log endpoint accepts, as the UI holds them. */
+export interface LogQuery {
+  service: string
+  level: string
+  search: string
+  traceId: string
+  fingerprint: string
+  windowMinutes: number
+}
+
+const LOG_PAGE_SIZE = 100
+
+/**
+ * Log search, paged by cursor.
+ *
+ * An infinite query rather than a paged one, because a log explorer is read by
+ * scrolling: pages accumulate into one list and the virtualiser renders a
+ * window of it. Asking for "page 4" of a stream that grows while it is read is
+ * not a question with a stable answer, which is why the API returns a cursor
+ * and no total.
+ */
+export function useLogs(environment: EnvironmentKey, query: LogQuery) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.logs(environment, query),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      apiGet<LogSearchResult>(
+        `/api/v1/logs${toQuery({
+          environment,
+          service: query.service,
+          level: query.level,
+          search: query.search,
+          traceId: query.traceId,
+          fingerprint: query.fingerprint,
+          windowMinutes: query.windowMinutes,
+          pageSize: LOG_PAGE_SIZE,
+          cursor: pageParam ?? undefined,
+        })}`,
+        signal,
+      ),
+    getNextPageParam: (lastPage) => lastPage.page.nextCursor,
+    // Not polled. Logs are read by scrolling back through what happened, and a
+    // refetch that reorders the list under a reader mid-scroll is worse than
+    // stale data. Live tail will push new lines instead, once the hub exists.
+    refetchInterval: false,
+    staleTime: 30_000,
   })
 }

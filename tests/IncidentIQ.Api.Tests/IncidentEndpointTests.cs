@@ -173,6 +173,27 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
             OrganizationId = tenantId, IncidentId = incidentId, Type = IncidentEventType.Created,
             OccurredAt = now.AddMinutes(-6), ActorType = ActorType.System, Message = "Opened by rule."
         });
+        // The retention window: every line, unlike the sample below. Two lines
+        // deliberately share a timestamp, which is what the cursor's tiebreak
+        // exists for and what a naive keyset silently drops.
+        for (var i = 0; i < 12; i++)
+        {
+            db.RawLogEvents.Add(new RawLogEvent
+            {
+                OrganizationId = tenantId,
+                EventId = Guid.CreateVersion7(),
+                MonitoredServiceId = serviceId,
+                EnvironmentId = environmentId,
+                LogPatternId = patternId,
+                OccurredAt = now.AddSeconds(-(i / 2)),
+                ReceivedAt = now,
+                Level = i % 4 == 0 ? LogEventLevel.Warning : LogEventLevel.Error,
+                Message = $"Connection timeout for user {1000 + i}",
+                TraceId = i == 0 ? "trace-abc-123" : null,
+                Host = "pod-a"
+            });
+        }
+
         db.LogEvents.Add(new LogEvent
         {
             OrganizationId = tenantId, EventId = Guid.CreateVersion7(), MonitoredServiceId = serviceId,
@@ -746,6 +767,135 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
 
         var incident = Assert.Single(body.GetProperty("items").EnumerateArray().ToList());
         Assert.Equal(_acmeIncidentId, incident.GetProperty("id").GetGuid());
+    }
+
+    // ---------------- Log search ----------------
+
+    [Fact]
+    public async Task Logs_are_scoped_to_the_calling_organization()
+    {
+        var acme = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs");
+        var globex = await Client(GlobexKey).GetFromJsonAsync<JsonElement>("/api/v1/logs");
+
+        var acmeItems = acme.GetProperty("page").GetProperty("items").EnumerateArray().ToList();
+        var globexItems = globex.GetProperty("page").GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Equal(12, acmeItems.Count);
+        Assert.Equal(12, globexItems.Count);
+
+        // Same count, different rows: both tenants were seeded identically, so
+        // a leak would look like correct data unless the service is checked.
+        Assert.All(acmeItems, item => Assert.Equal("payments-api", item.GetProperty("service").GetString()));
+        Assert.All(globexItems, item => Assert.Equal("shipping-api", item.GetProperty("service").GetString()));
+    }
+
+    [Fact]
+    public async Task Logs_come_back_newest_first()
+    {
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs");
+
+        var timestamps = body.GetProperty("page").GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("occurredAt").GetDateTimeOffset())
+            .ToList();
+
+        for (var i = 1; i < timestamps.Count; i++)
+        {
+            Assert.True(timestamps[i] <= timestamps[i - 1], "Log lines must be newest first.");
+        }
+    }
+
+    [Fact]
+    public async Task Paging_the_cursor_returns_every_line_exactly_once()
+    {
+        // The property that matters. Half the seeded lines share a timestamp
+        // with a neighbour, so a cursor keyed on time alone would skip rows -
+        // and skipping a log line during an outage is invisible and expensive.
+        var seen = new List<long>();
+        string? cursor = null;
+
+        for (var page = 0; page < 20; page++)
+        {
+            var url = cursor is null ? "/api/v1/logs?pageSize=5" : $"/api/v1/logs?pageSize=5&cursor={cursor}";
+            var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>(url);
+
+            seen.AddRange(body.GetProperty("page").GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetInt64()));
+
+            cursor = body.GetProperty("page").GetProperty("nextCursor").GetString();
+
+            if (cursor is null)
+            {
+                break;
+            }
+        }
+
+        Assert.Null(cursor);
+        Assert.Equal(12, seen.Count);
+        Assert.Equal(12, seen.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task A_level_filter_includes_everything_at_or_above_it()
+    {
+        // The trap this guards: level is stored as a string, so a relational
+        // comparison would be alphabetical, and alphabetically Error sorts
+        // before Warning - "warnings and above" would hide every error.
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs?level=Warning");
+
+        var levels = body.GetProperty("page").GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("level").GetString())
+            .ToList();
+
+        Assert.Equal(12, levels.Count);
+        Assert.Contains("Error", levels);
+        Assert.Contains("Warning", levels);
+    }
+
+    [Fact]
+    public async Task Filtering_by_trace_id_narrows_to_that_request()
+    {
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs?traceId=trace-abc-123");
+
+        var item = Assert.Single(body.GetProperty("page").GetProperty("items").EnumerateArray().ToList());
+        Assert.Equal("trace-abc-123", item.GetProperty("traceId").GetString());
+    }
+
+    [Fact]
+    public async Task Searching_the_message_is_case_insensitive()
+    {
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs?search=CONNECTION");
+
+        Assert.Equal(12, body.GetProperty("page").GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task The_window_says_how_far_back_the_explorer_can_see()
+    {
+        // Rendered next to the results so nobody reads an empty explorer as
+        // "nothing happened" when it means "nothing is retained that far back".
+        var body = await Client(AcmeKey).GetFromJsonAsync<JsonElement>("/api/v1/logs");
+        var window = body.GetProperty("window");
+
+        Assert.True(window.GetProperty("retentionHours").GetInt32() > 0);
+        Assert.NotEqual(JsonValueKind.Null, window.GetProperty("oldestAvailableAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task An_unknown_level_is_a_400_that_lists_the_valid_ones()
+    {
+        var response = await Client(AcmeKey).GetAsync("/api/v1/logs?level=Loud");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Warning", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_malformed_cursor_is_a_400_rather_than_a_500()
+    {
+        // Cursors travel in URLs that get pasted, truncated and edited.
+        var response = await Client(AcmeKey).GetAsync("/api/v1/logs?cursor=not-a-real-cursor");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ---------------- Overview aggregations ----------------

@@ -64,6 +64,7 @@ app.UseMiddleware<TenantScopeMiddleware>();
 
 app.MapIncidentEndpoints();
 app.MapIncidentActionEndpoints();
+app.MapLogEndpoints();
 app.MapOverviewEndpoints();
 
 app.Run();

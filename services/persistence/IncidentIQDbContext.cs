@@ -21,6 +21,9 @@ public class IncidentIQDbContext(DbContextOptions<IncidentIQDbContext> options, 
     public DbSet<Environment> Environments => Set<Environment>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
     public DbSet<LogEvent> LogEvents => Set<LogEvent>();
+
+    /// <summary>Every line, kept for a short window. See <see cref="RawLogEvent"/>.</summary>
+    public DbSet<RawLogEvent> RawLogEvents => Set<RawLogEvent>();
     public DbSet<LogPattern> LogPatterns => Set<LogPattern>();
     public DbSet<LogPatternMetric> LogPatternMetrics => Set<LogPatternMetric>();
     public DbSet<Incident> Incidents => Set<Incident>();

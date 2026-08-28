@@ -21,3 +21,4 @@ new record that supersedes the old one rather than editing history.
 | [0014](0014-transactional-outbox.md) | Transactional outbox for integration events | Accepted |
 | [0015](0015-deterministic-incident-detection.md) | Deterministic rules before anomaly detection | Accepted |
 | [0016](0016-evidence-before-llm.md) | Gather evidence deterministically before involving an LLM | Accepted |
+| [0017](0017-raw-log-retention-window.md) | Keep every log line for a bounded window, beside the permanent sample | Accepted |

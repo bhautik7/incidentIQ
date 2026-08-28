@@ -193,3 +193,55 @@ export interface OrganizationMember {
   displayName: string
   email: string
 }
+
+export type LogLevel = 'Trace' | 'Debug' | 'Information' | 'Warning' | 'Error' | 'Fatal'
+
+/**
+ * One page of a stream.
+ *
+ * No total count and no page number, deliberately: counting a log table means
+ * scanning it, and the answer changes between the count and the fetch because
+ * lines keep arriving. A cursor states the only thing that stays true - what
+ * comes next.
+ */
+export interface CursorPage<T> {
+  items: T[]
+  /** Opaque. Null once the end of the retention window is reached. */
+  nextCursor: string | null
+}
+
+export interface LogEntry {
+  id: number
+  occurredAt: string
+  receivedAt: string
+  level: LogLevel
+  service: string
+  environment: string
+  message: string
+  exceptionType: string | null
+  stackTrace: string | null
+  traceId: string | null
+  spanId: string | null
+  host: string | null
+  /** Raw jsonb text, rendered in the row's JSON view. */
+  properties: string | null
+  fingerprint: string | null
+  /** An incident currently open for this line's pattern, if any. */
+  incidentId: string | null
+}
+
+/**
+ * How far back the explorer can actually see.
+ *
+ * Rendered beside the results so an empty table reads as "nothing is retained
+ * that far back" rather than "nothing happened".
+ */
+export interface LogWindow {
+  retentionHours: number
+  oldestAvailableAt: string | null
+}
+
+export interface LogSearchResult {
+  page: CursorPage<LogEntry>
+  window: LogWindow
+}
