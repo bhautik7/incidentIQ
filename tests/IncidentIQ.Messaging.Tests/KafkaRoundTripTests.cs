@@ -252,6 +252,13 @@ public class KafkaRoundTripTests(KafkaFixture fixture)
         });
 
         services.AddSingleton<IEventProducer, KafkaEventProducer>();
+
+        // The consume loop reports into this on every pass. Registered here
+        // because these tests wire the hosted service by hand rather than
+        // through AddIncidentIQKafkaConsumer, which does it for real hosts.
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ConsumerLivenessRegistry>();
+
         services.AddSingleton(sink);
         services.AddScoped<RecordingHandler>();
         services.AddSingleton(new KafkaConsumerSubscription<LogReceived>

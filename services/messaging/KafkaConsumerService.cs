@@ -43,6 +43,7 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
     IOptions<KafkaOptions> kafkaOptions,
     IServiceScopeFactory scopeFactory,
     IEventProducer producer,
+    ConsumerLivenessRegistry liveness,
     ILogger<KafkaConsumerService<TPayload, THandler>> logger) : BackgroundService
     where THandler : IEventHandler<TPayload>
 {
@@ -89,6 +90,12 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
 
         consumer.Subscribe(subscription.Topic);
 
+        // Registered before the first poll so a loop that dies immediately is
+        // still visible as a consumer that stopped, rather than as one that
+        // never existed.
+        liveness.AllowPollInterval(TimeSpan.FromMilliseconds(consumerOptions.MaxPollIntervalMs));
+        liveness.Register(subscription.Topic, subscription.ConsumerGroup);
+
         logger.LogInformation(
             "Consuming {Topic} as group {Group}. Manual offset commits every {Interval}ms or {Count} messages.",
             subscription.Topic, subscription.ConsumerGroup,
@@ -101,6 +108,11 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                // Reported before the poll, not after: a Consume() that
+                // blocks for its full timeout is normal, and waiting until it
+                // returns would make an idle topic look like a stall.
+                liveness.ReportPoll(subscription.Topic, subscription.ConsumerGroup, consumer.Assignment.Count);
+
                 ConsumeResult<string, byte[]>? result;
 
                 try
@@ -153,6 +165,11 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
             // time out, so the next replica picks up these partitions in
             // seconds rather than tens of seconds.
             consumer.Close();
+
+            // Deregistered so a container that is deliberately shutting down
+            // does not report its own stopped consumer as a fault.
+            liveness.Deregister(subscription.Topic, subscription.ConsumerGroup);
+
             logger.LogInformation("Consumer for {Topic} closed cleanly.", subscription.Topic);
         }
     }

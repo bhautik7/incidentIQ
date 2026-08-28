@@ -48,6 +48,7 @@ public sealed class KafkaBatchConsumerService<TPayload, THandler>(
     IOptions<KafkaOptions> kafkaOptions,
     IServiceScopeFactory scopeFactory,
     IEventProducer producer,
+    ConsumerLivenessRegistry liveness,
     ILogger<KafkaBatchConsumerService<TPayload, THandler>> logger) : BackgroundService
     where THandler : IEventBatchHandler<TPayload>
 {
@@ -93,6 +94,12 @@ public sealed class KafkaBatchConsumerService<TPayload, THandler>(
 
         consumer.Subscribe(subscription.Topic);
 
+        // Registered before the first poll so a loop that dies immediately is
+        // still visible as a consumer that stopped, rather than one that never
+        // existed.
+        liveness.AllowPollInterval(TimeSpan.FromMilliseconds(consumerOptions.MaxPollIntervalMs));
+        liveness.Register(subscription.Topic, subscription.ConsumerGroup);
+
         logger.LogInformation(
             "Batch-consuming {Topic} as group {Group}. batchSize={BatchSize} maxWaitMs={MaxWait}",
             subscription.Topic, subscription.ConsumerGroup,
@@ -105,6 +112,11 @@ public sealed class KafkaBatchConsumerService<TPayload, THandler>(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                // Reported per batch cycle rather than per inner poll: one
+                // cycle is bounded by MaxBatchWaitMs, so this still advances
+                // several times a second on an idle topic.
+                liveness.ReportPoll(subscription.Topic, subscription.ConsumerGroup, consumer.Assignment.Count);
+
                 var raw = CollectBatch(consumer, stoppingToken);
 
                 if (raw.Count == 0)
@@ -143,6 +155,10 @@ public sealed class KafkaBatchConsumerService<TPayload, THandler>(
             // to time out, so a replacement replica picks up these partitions
             // in seconds.
             consumer.Close();
+
+            // Deregistered so a container that is deliberately shutting down
+            // does not report its own stopped consumer as a fault.
+            liveness.Deregister(subscription.Topic, subscription.ConsumerGroup);
             logger.LogInformation("Batch consumer for {Topic} closed cleanly.", subscription.Topic);
         }
     }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace IncidentIQ.Messaging;
@@ -25,6 +26,20 @@ public static class MessagingServiceCollectionExtensions
     }
 
     /// <summary>
+    /// The registry every consume loop reports into, plus the readiness check
+    /// that reads it.
+    ///
+    /// Registered by both consumer extensions so a host cannot end up with
+    /// consumers and no way to tell whether they are alive - which is the
+    /// situation this whole mechanism exists to prevent.
+    /// </summary>
+    private static void AddConsumerLiveness(IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<ConsumerLivenessRegistry>();
+    }
+
+    /// <summary>
     /// Registers a consumer for one topic and the handler that services it.
     ///
     /// The handler is scoped: each message gets a fresh scope, so it can take a
@@ -37,6 +52,7 @@ public static class MessagingServiceCollectionExtensions
         string? deadLetterTopic = null)
         where THandler : class, IEventHandler<TPayload>
     {
+        AddConsumerLiveness(services);
         services.AddScoped<THandler>();
 
         services.AddSingleton(new KafkaConsumerSubscription<TPayload>
@@ -67,6 +83,7 @@ public static class MessagingServiceCollectionExtensions
         int maxBatchWaitMs = 250)
         where THandler : class, IEventBatchHandler<TPayload>
     {
+        AddConsumerLiveness(services);
         services.AddScoped<THandler>();
 
         services.AddSingleton(new KafkaBatchConsumerSubscription<TPayload>

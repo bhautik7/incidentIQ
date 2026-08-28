@@ -18,6 +18,7 @@ import structlog
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from app.config import Settings
+from app.messaging.liveness import consumer_liveness
 
 logger = structlog.get_logger(__name__)
 
@@ -95,6 +96,11 @@ class EventConsumer:
 
     async def run(self) -> None:
         self._consumer.subscribe([self._topic])
+
+        # Registered before the first poll, so a loop that dies immediately
+        # still reads as a consumer that stopped rather than one that never was.
+        consumer_liveness.register(self._topic, self._settings.kafka_consumer_group)
+
         logger.info(
             "consumer_started",
             topic=self._topic,
@@ -103,6 +109,11 @@ class EventConsumer:
 
         try:
             while not self._stopping.is_set():
+                # Reported before the poll, not after: poll() blocking for its
+                # full timeout is normal, and waiting for it to return would
+                # make an idle topic look like a stall.
+                consumer_liveness.report_poll(len(self._consumer.assignment()))
+
                 # poll() blocks, so it runs on a worker thread to keep the
                 # event loop free for FastAPI's health endpoints.
                 message = await asyncio.to_thread(self._consumer.poll, 0.5)
@@ -121,6 +132,11 @@ class EventConsumer:
             # Leave the group deliberately rather than waiting out the session
             # timeout, so a replacement picks up these partitions in seconds.
             await asyncio.to_thread(self._consumer.close)
+
+            # Deregistered so a worker that is deliberately shutting down does
+            # not report its own stopped consumer as a fault.
+            consumer_liveness.deregister()
+
             logger.info("consumer_closed", topic=self._topic)
 
     async def _handle(self, message) -> None:

@@ -56,6 +56,14 @@ builder.Services.AddIncidentIQKafkaBatchConsumer<LogNormalized, IncidentDetector
     maxBatchSize: builder.Configuration.GetValue("Detection:MaxBatchSize", 500),
     maxBatchWaitMs: builder.Configuration.GetValue("Detection:MaxBatchWaitMs", 500));
 
+// Readiness must answer "are we consuming", not only "is a broker reachable".
+// Both consumers in this process have gone quiet while every other probe stayed
+// green; the broker check cannot see that, because the broker was fine.
+builder.Services.AddHealthChecks()
+    .AddCheck<KafkaConsumerHealthCheck>(
+        "kafka-consumers",
+        tags: ["ready"]);
+
 var app = builder.Build();
 
 app.MapIncidentIqDefaults();

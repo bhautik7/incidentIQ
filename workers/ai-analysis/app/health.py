@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 
 from app.config import Settings
+from app.messaging.liveness import consumer_liveness
 
 _TIMEOUT_SECONDS = 5.0
 
@@ -86,5 +87,38 @@ async def check_kafka(settings: Settings) -> CheckResult:
         return _timed("kafka", started, error=f"{type(exc).__name__}: {exc}")
 
 
+async def check_consumer(settings: Settings) -> CheckResult:
+    """Whether this worker is consuming, as distinct from whether Kafka is up.
+
+    check_kafka above asks the broker for metadata, which was green throughout
+    the incident this exists for: the broker was fine and the consumer had
+    quietly left its group. Only this process can answer the second question.
+    """
+    started = time.perf_counter()
+    fault = consumer_liveness.fault()
+
+    if fault:
+        return _timed("kafka-consumer", started, error=fault)
+
+    state = consumer_liveness.snapshot()
+
+    if state is None:
+        # Not started yet. Ordinary during boot, and failing here would make
+        # the container flap before it has had a chance to subscribe.
+        return _timed("kafka-consumer", started, description="Consumer not started.")
+
+    return _timed(
+        "kafka-consumer",
+        started,
+        description=f"Polling {state.topic} with {state.partition_count} partition(s).",
+    )
+
+
 async def run_readiness_checks(settings: Settings) -> list[CheckResult]:
-    return list(await asyncio.gather(check_postgres(settings), check_kafka(settings)))
+    return list(
+        await asyncio.gather(
+            check_postgres(settings),
+            check_kafka(settings),
+            check_consumer(settings),
+        )
+    )
