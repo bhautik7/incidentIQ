@@ -2,6 +2,7 @@ using System.Text.Json;
 using IncidentIQ.Contracts;
 using IncidentIQ.Contracts.Payloads;
 using IncidentIQ.Domain.Enums;
+using IncidentIQ.Incidents;
 using IncidentIQ.Messaging;
 using IncidentIQ.Persistence;
 using Microsoft.Extensions.Options;
@@ -378,19 +379,4 @@ public sealed class IncidentDetector(
         new(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, TimeSpan.Zero);
 
     private static string Short(string fingerprint) => fingerprint[..Math.Min(12, fingerprint.Length)];
-}
-
-/// <summary>
-/// How "the same active problem" is identified, per rule shape.
-///
-/// Pattern rules key on the fingerprint. The server-error spike keys on the
-/// service and environment, because it is about a service being broken rather
-/// than about any one error.
-/// </summary>
-public static class IncidentDedupeKeys
-{
-    public static string ForPattern(string fingerprint) => $"fp:{fingerprint}";
-
-    public static string ForServerErrors(Guid serviceId, Guid environmentId) =>
-        $"svc5xx:{serviceId:D}:{environmentId:D}";
 }

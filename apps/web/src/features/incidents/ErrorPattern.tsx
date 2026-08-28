@@ -1,5 +1,6 @@
-import { ChevronRight, Copy } from 'lucide-react'
+import { ChevronRight, Copy, FileSearch } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 
 import { Tag } from '../../components/ui/Badge'
 import { cn } from '../../lib/cn'
@@ -48,6 +49,20 @@ export function ErrorPattern({
         </code>
         <CopyButton value={pattern.fingerprint} label="Copy fingerprint" />
       </div>
+
+      {/* Always offered, never conditional on the analysis having gone well.
+          Everything above this line is a conclusion drawn by the system; this
+          is the evidence it was drawn from. A tool that only ever hands over
+          conclusions is discarded the first time one of them is wrong, so the
+          way back to the unaggregated lines has to be on the page whether or
+          not anybody clicks it. */}
+      <Link
+        to={`/logs?fingerprint=${pattern.fingerprint}`}
+        className="inline-flex items-center gap-1 text-[11px] text-ink-muted transition-quick hover:text-accent hover:underline"
+      >
+        <FileSearch size={11} aria-hidden />
+        Show me the raw lines
+      </Link>
 
       {samples.length > 0 && (
         <div>

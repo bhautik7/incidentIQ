@@ -71,7 +71,19 @@ public enum DetectionRule
     NewErrorAfterDeployment,
 
     /// <summary>Opened by a person rather than by a rule.</summary>
-    Manual
+    Manual,
+
+    /// <summary>
+    /// Opened on demand for an uploaded log, because no rule fired.
+    ///
+    /// Distinct from <see cref="Manual"/>, which is somebody declaring an
+    /// incident they already know about. This one says the *system* was asked
+    /// to diagnose a specific pattern that crossed no threshold - a pasted log
+    /// is 100 lines, not the sustained burst the rules are tuned for - so the
+    /// occurrence count behind it is deliberately small and the incident should
+    /// not be read as evidence that anything is spiking.
+    /// </summary>
+    UserRequested
 }
 
 public enum IncidentSeverity

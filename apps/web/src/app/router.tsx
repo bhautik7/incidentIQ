@@ -14,6 +14,7 @@ const Overview = lazy(() => import('../routes/Overview'))
 const Incidents = lazy(() => import('../routes/Incidents'))
 const IncidentDetail = lazy(() => import('../routes/IncidentDetail'))
 const Logs = lazy(() => import('../routes/Logs'))
+const Diagnose = lazy(() => import('../routes/Diagnose'))
 const Services = lazy(() => import('../routes/Services'))
 const ServiceDetail = lazy(() => import('../routes/ServiceDetail'))
 const Deployments = lazy(() => import('../routes/Deployments'))
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: 'incidents', element: <Incidents /> },
       { path: 'incidents/:incidentId', element: <IncidentDetail /> },
       { path: 'logs', element: <Logs /> },
+      { path: 'diagnose', element: <Diagnose /> },
       { path: 'services', element: <Services /> },
       { path: 'services/:serviceKey', element: <ServiceDetail /> },
       { path: 'deployments', element: <Deployments /> },

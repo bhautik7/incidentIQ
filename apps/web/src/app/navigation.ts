@@ -10,6 +10,7 @@ import {
   ScrollText,
   Settings,
   Siren,
+  Stethoscope,
   Users,
 } from 'lucide-react'
 
@@ -40,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/incidents', label: 'Incidents', icon: Siren, badgeKey: 'activeIncidents' },
       { to: '/services', label: 'Services', icon: Boxes },
       { to: '/logs', label: 'Logs', icon: ScrollText },
+      { to: '/diagnose', label: 'Diagnose a log', icon: Stethoscope },
     ],
   },
   {

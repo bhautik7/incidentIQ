@@ -116,6 +116,7 @@ app.UseMiddleware<TenantScopeMiddleware>();
 
 app.MapIncidentEndpoints();
 app.MapIncidentActionEndpoints();
+app.MapDiagnoseEndpoints();
 app.MapLogEndpoints();
 
 // Guarded by the same middleware as the REST routes, so a connection arrives

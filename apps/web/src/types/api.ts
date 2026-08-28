@@ -245,3 +245,24 @@ export interface LogSearchResult {
   page: CursorPage<LogEntry>
   window: LogWindow
 }
+
+/**
+ * The result of asking for an uploaded log to be diagnosed.
+ *
+ * "pending" is a normal answer, not an error: ingestion returns as soon as the
+ * batch is on Kafka, so there is a window in which the upload succeeded and the
+ * patterns behind it do not exist yet. The client polls until it is something
+ * else.
+ */
+export interface DiagnoseResult {
+  status: 'pending' | 'opened' | 'existing'
+  incidentId: string | null
+  /** The dominant pattern's fingerprint, for linking to its raw lines. */
+  fingerprint: string | null
+  title: string | null
+  /** Occurrences inside the upload's window, not the pattern's lifetime total. */
+  occurrenceCount: number
+  patternsFound: number
+  /** Written to be shown to the person waiting. */
+  message: string
+}
