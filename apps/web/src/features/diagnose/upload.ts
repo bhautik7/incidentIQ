@@ -195,7 +195,7 @@ export async function sendToIngestion(
     try {
       response = await fetch(`${config.ingestionBaseUrl}/api/v1/logs/batch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Api-Key': config.apiKey },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events: batch }),
       })
     } catch {

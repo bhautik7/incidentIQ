@@ -1,18 +1,18 @@
 export type PlatformConfig = {
-  apiBaseUrl: string
   /**
-   * API key used for read requests.
+   * Where the API lives, as seen by the browser.
    *
-   * Injected at container start rather than built in, but note that anything
-   * delivered to a browser is readable by whoever loads the page. That is
-   * acceptable for a single-tenant local dashboard and is NOT acceptable in
-   * production, where this should become a short-lived token issued by a login
-   * flow. Tracked as such; see the README.
+   * Empty by default, and that is the whole point: the page and everything it
+   * talks to are served from one origin, and the proxy in front adds the API
+   * key on the way through. Nothing here is a secret, because nothing here can
+   * authenticate anybody.
+   *
+   * It was not always so - the key used to be delivered to the browser in this
+   * object, which meant a tenant's full read/write credential was readable by
+   * anyone who opened devtools.
    */
-  apiKey: string
+  apiBaseUrl: string
   ingestionBaseUrl: string
-  eventProcessorBaseUrl: string
-  aiAnalysisBaseUrl: string
 }
 
 declare global {
@@ -24,20 +24,14 @@ declare global {
 const runtime = window.__INCIDENTIQ_CONFIG__ ?? {}
 
 /**
- * Resolution order: runtime config injected by the container entrypoint, then
- * build-time Vite variables, then localhost defaults for `npm run dev`.
- * The browser runs on the host, so these are always published host ports -
- * never Docker service names, which the host cannot resolve.
+ * Resolution order: runtime config written by the container entrypoint, then
+ * build-time Vite variables, then same-origin relative paths.
+ *
+ * The relative default is what `npm run dev` uses too - vite.config.ts proxies
+ * the same three prefixes to the same services, so development and the
+ * container disagree about ports and about nothing else.
  */
 export const config: PlatformConfig = {
-  apiBaseUrl: runtime.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5080',
-  apiKey: runtime.apiKey ?? import.meta.env.VITE_API_KEY ?? '',
-  ingestionBaseUrl:
-    runtime.ingestionBaseUrl ?? import.meta.env.VITE_INGESTION_BASE_URL ?? 'http://localhost:5081',
-  eventProcessorBaseUrl:
-    runtime.eventProcessorBaseUrl ??
-    import.meta.env.VITE_EVENT_PROCESSOR_BASE_URL ??
-    'http://localhost:5082',
-  aiAnalysisBaseUrl:
-    runtime.aiAnalysisBaseUrl ?? import.meta.env.VITE_AI_ANALYSIS_BASE_URL ?? 'http://localhost:5083',
+  apiBaseUrl: runtime.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? '',
+  ingestionBaseUrl: runtime.ingestionBaseUrl ?? import.meta.env.VITE_INGESTION_BASE_URL ?? '/ingest',
 }

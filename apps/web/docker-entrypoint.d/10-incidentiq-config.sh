@@ -1,19 +1,34 @@
 #!/bin/sh
-# Regenerates /config.js from environment variables at container start.
-# This is what lets one immutable image be promoted from dev to production:
-# the bundle is built once, the endpoints are injected per environment.
+# Runs before nginx starts. Two jobs, and the split between them is the point.
+#
+# The API key goes into nginx's own configuration, where the proxy can add it
+# to each upstream request. It is never written anywhere under the document
+# root, so there is no URL that serves it and nothing in the page to copy.
+#
+# Everything the browser is allowed to know goes into config.js, which is now
+# only a set of paths on this same origin.
 set -eu
 
 CONFIG_FILE=/usr/share/nginx/html/config.js
+NGINX_CONF=/etc/nginx/conf.d/default.conf
+
+API_KEY="${WEB_API_KEY:-}"
+
+if [ -z "$API_KEY" ]; then
+    # Refused rather than started, because a proxy with no key produces a
+    # dashboard where every request fails with 401 and nothing says why.
+    echo "incidentiq: WEB_API_KEY is not set; the proxy would authenticate nothing." >&2
+    exit 1
+fi
+
+# The placeholder appears exactly once, in the map block at the top.
+sed -i "s|__INCIDENTIQ_API_KEY__|${API_KEY}|" "$NGINX_CONF"
 
 cat > "$CONFIG_FILE" <<JS
 window.__INCIDENTIQ_CONFIG__ = {
-  apiBaseUrl: "${WEB_API_BASE_URL:-http://localhost:5080}",
-  apiKey: "${WEB_API_KEY:-}",
-  ingestionBaseUrl: "${WEB_INGESTION_BASE_URL:-http://localhost:5081}",
-  eventProcessorBaseUrl: "${WEB_EVENT_PROCESSOR_BASE_URL:-http://localhost:5082}",
-  aiAnalysisBaseUrl: "${WEB_AI_ANALYSIS_BASE_URL:-http://localhost:5083}",
+  apiBaseUrl: "",
+  ingestionBaseUrl: "/ingest",
 };
 JS
 
-echo "incidentiq: wrote runtime config to $CONFIG_FILE"
+echo "incidentiq: proxying /api, /hubs and /ingest with a server-side key"

@@ -57,15 +57,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [connection, setConnection] = useState<HubConnection | null>(null)
 
   useEffect(() => {
-    // The key travels in the query string because a browser cannot put a header
-    // on a WebSocket handshake. The API opts only /hubs into this.
+    // No token on the handshake. The API accepts one in the query string
+    // because a browser cannot set a header on a WebSocket upgrade - but the
+    // proxy this connection goes through can, and it does, so the client has
+    // nothing to send and nothing to leak.
     const hub = new HubConnectionBuilder()
       .withUrl(`${config.apiBaseUrl}/hubs/incidents`, {
-        accessTokenFactory: () => config.apiKey,
-        // The client defaults to credentialed CORS, which would oblige the API
-        // to send Access-Control-Allow-Credentials and to widen its policy.
-        // There are no cookies here - the key travels as a query token - so the
-        // simply-CORS request is both sufficient and the tighter option.
+        // No cookies either, so the tighter simple-CORS request is enough.
         withCredentials: false,
       })
       // Backoff rather than a fixed interval: a hub that is down is usually

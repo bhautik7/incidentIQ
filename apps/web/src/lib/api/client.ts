@@ -23,10 +23,9 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
   let response: Response
 
   try {
-    response = await fetch(`${config.apiBaseUrl}${path}`, {
-      signal,
-      headers: { 'X-Api-Key': config.apiKey },
-    })
+    // No credential here: the proxy in front of this origin adds it. A key in
+    // the bundle is a key the visitor has.
+    response = await fetch(`${config.apiBaseUrl}${path}`, { signal })
   } catch (cause) {
     // fetch only rejects for network-level failures, and the browser's message
     // ("Failed to fetch") tells the user nothing about which service is down.
@@ -82,10 +81,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   try {
     response = await fetch(`${config.apiBaseUrl}${path}`, {
       method: 'POST',
-      headers: {
-        'X-Api-Key': config.apiKey,
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {

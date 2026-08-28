@@ -360,17 +360,20 @@ services:
     image: incidentiq/web:dev
     container_name: incidentiq-web
     depends_on:
+      # Both, now: nginx resolves an upstream's name at start-up, and a proxy
+      # whose upstream does not yet exist refuses to start rather than
+      # retrying.
       api:
         condition: service_started
+      ingestion:
+        condition: service_started
     environment:
-      # These are read by the BROWSER, which runs on the host - so they must be
-      # host-published ports, never compose service names.
-      # Readable by anyone who loads the page - acceptable for a local
-      # single-tenant dashboard, not for production.
+      # Read by NGINX, not by the browser. It is added to each proxied request
+      # inside this container, so it never reaches the page - which is what
+      # makes the dashboard's URL safe to give to somebody.
+      #
+      # The browser is told only which paths to call, and they are all on this
+      # same origin, so no host ports appear here any more.
       WEB_API_KEY: ${WEB_API_KEY:-iiq_dev_0123456789abcdef}
-      WEB_API_BASE_URL: http://localhost:${API_HOST_PORT:-5080}
-      WEB_INGESTION_BASE_URL: http://localhost:${INGESTION_HOST_PORT:-5081}
-      WEB_EVENT_PROCESSOR_BASE_URL: http://localhost:${EVENT_PROCESSOR_HOST_PORT:-5082}
-      WEB_AI_ANALYSIS_BASE_URL: http://localhost:${AI_ANALYSIS_HOST_PORT:-5083}
     ports:
       - "${WEB_HOST_PORT:-3000}:80"
