@@ -1,17 +1,10 @@
 import {
   Activity,
-  BarChart3,
-  Bell,
-  Boxes,
-  Cpu,
   LayoutDashboard,
   type LucideIcon,
-  Rocket,
   ScrollText,
-  Settings,
   Siren,
   Stethoscope,
-  Users,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -33,34 +26,29 @@ export type NavGroup = {
  * changed, what does the system think, and configuration - rather than the
  * data model.
  */
+/**
+ * Only pages that do something.
+ *
+ * The sidebar previously listed ten items, nine of which rendered a
+ * placeholder. A visitor clicking around therefore hit a dead end far more
+ * often than not, which makes a product that works read as one that is broken -
+ * an empty room is worse than a smaller building. The routes still exist for
+ * anyone holding a link; nothing advertises them until they are real.
+ *
+ * Diagnosing a log comes first because it is the one thing someone arriving
+ * here can do immediately, without having connected anything.
+ */
 export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Diagnose',
+    items: [{ to: '/', label: 'Diagnose a log', icon: Stethoscope }],
+  },
   {
     label: 'Monitor',
     items: [
-      { to: '/', label: 'Overview', icon: LayoutDashboard },
+      { to: '/overview', label: 'Overview', icon: LayoutDashboard },
       { to: '/incidents', label: 'Incidents', icon: Siren, badgeKey: 'activeIncidents' },
-      { to: '/services', label: 'Services', icon: Boxes },
       { to: '/logs', label: 'Logs', icon: ScrollText },
-      { to: '/diagnose', label: 'Diagnose a log', icon: Stethoscope },
-    ],
-  },
-  {
-    label: 'Change',
-    items: [{ to: '/deployments', label: 'Deployments', icon: Rocket }],
-  },
-  {
-    label: 'Intelligence',
-    items: [
-      { to: '/ai-investigations', label: 'AI Investigations', icon: Cpu },
-      { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    label: 'Configure',
-    items: [
-      { to: '/alert-rules', label: 'Alert Rules', icon: Bell },
-      { to: '/team', label: 'Team', icon: Users },
-      { to: '/settings', label: 'Settings', icon: Settings },
     ],
   },
 ]

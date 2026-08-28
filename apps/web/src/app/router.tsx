@@ -31,11 +31,13 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     errorElement: <RouteError />,
     children: [
-      { index: true, element: <Overview /> },
+      // The paste box is the front door: it is the only page that is useful
+      // to someone who has not connected anything yet.
+      { index: true, element: <Diagnose /> },
+      { path: 'overview', element: <Overview /> },
       { path: 'incidents', element: <Incidents /> },
       { path: 'incidents/:incidentId', element: <IncidentDetail /> },
       { path: 'logs', element: <Logs /> },
-      { path: 'diagnose', element: <Diagnose /> },
       { path: 'services', element: <Services /> },
       { path: 'services/:serviceKey', element: <ServiceDetail /> },
       { path: 'deployments', element: <Deployments /> },
