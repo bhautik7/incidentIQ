@@ -45,6 +45,7 @@ export default function DiagnosePage() {
   const [dragging, setDragging] = useState(false)
   const [readError, setReadError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const answer = useRef<HTMLDivElement>(null)
 
   const events = useMemo(() => (text.trim() ? parseLog(text) : []), [text])
 
@@ -63,8 +64,17 @@ export default function DiagnosePage() {
   useEffect(() => {
     if (state.result?.status === 'opened' && state.result.incidentId) {
       void navigate(`/incidents/${state.result.incidentId}`)
+      return
     }
-  }, [state.result, navigate])
+
+    // The answer that does not redirect has to come and find the reader
+    // instead. On a wide viewport it appears in the right-hand column, which
+    // is not where someone who just pressed a button on the left is looking -
+    // and an answer nobody sees is indistinguishable from no answer at all.
+    if (state.result?.status === 'existing' || state.stage === 'error') {
+      answer.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [state.result, state.stage, navigate])
 
   const readFile = useCallback((file: File) => {
     setReadError(null)
@@ -199,7 +209,10 @@ export default function DiagnosePage() {
                 onChange={(event) => setService(event.target.value)}
                 list="diagnose-services"
                 disabled={busy}
-                placeholder="payments-api"
+                // "payments-api" alone reads as a value that is already
+                // filled in, and a required field that looks answered is how a
+                // disabled button becomes "I clicked it and nothing happened".
+                placeholder="e.g. payments-api"
                 className="h-7 w-52 rounded-[4px] border border-line bg-raised px-2 font-mono text-[12px] text-ink outline-none transition-quick hover:border-line-strong focus:border-accent"
               />
               {/* Free text with suggestions rather than a picker: the first log
@@ -234,6 +247,16 @@ export default function DiagnosePage() {
             </label>
 
             <div className="ml-auto flex items-center gap-2">
+              {/* A disabled button that does nothing when clicked is
+                  indistinguishable from a broken one. The requirement is said
+                  out loud, next to the control that is refusing, rather than
+                  hidden in a tooltip nobody hovers. */}
+              {!busy && events.length > 0 && !service.trim() && (
+                <span className="text-[11px] text-sev-high">
+                  Name the service this log came from →
+                </span>
+              )}
+
               {busy && (
                 <span className="text-[11px] text-ink-muted">
                   {state.stage === 'uploading'
@@ -273,6 +296,8 @@ export default function DiagnosePage() {
         </section>
 
         <section className="space-y-3">
+          <div ref={answer} />
+
           {state.stage === 'error' && state.error ? (
             <ErrorState
               title="The diagnosis could not be completed"
