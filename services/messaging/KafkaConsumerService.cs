@@ -21,6 +21,45 @@ public sealed class KafkaConsumerSubscription<TPayload>
     /// stream where losing an event is worse than stalling.
     /// </summary>
     public string? DeadLetterTopic { get; init; } = Topics.LogsFailed;
+
+    /// <summary>
+    /// Give every process its own consumer group, so each one receives every
+    /// message rather than sharing the partitions out between them.
+    ///
+    /// The default - a shared group - is right for work: two replicas of the
+    /// event processor should split the load, and a message handled once is
+    /// handled. It is exactly wrong for a fan-out, where each replica holds
+    /// different client connections and needs the same message the others got.
+    /// Sharing a group there means an incident reaches whichever replica drew
+    /// the partition and nobody connected to the others ever hears about it.
+    /// </summary>
+    public bool BroadcastToEveryInstance { get; init; }
+
+    /// <summary>
+    /// Where a brand new group starts. Null uses the configured default.
+    ///
+    /// A fan-out wants "latest": its groups are new on every start, and
+    /// "earliest" would replay the entire retained history into connected
+    /// clients as though it had just happened.
+    /// </summary>
+    public string? AutoOffsetResetOverride { get; init; }
+
+    /// <summary>
+    /// One suffix per process: stable for its lifetime, different between
+    /// processes, which is exactly the shape a broadcast group needs.
+    /// </summary>
+    private static readonly string InstanceSuffix = Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>
+    /// The group this subscription actually joins.
+    ///
+    /// A restarted process joins under a new name and leaves its previous group
+    /// empty; Kafka expires those on its own once offsets age out. That is the
+    /// accepted cost of broadcast semantics without a backplane, and it is why
+    /// this is opt-in rather than the default.
+    /// </summary>
+    public string ResolvedConsumerGroup =>
+        BroadcastToEveryInstance ? $"{ConsumerGroup}-{InstanceSuffix}" : ConsumerGroup;
 }
 
 /// <summary>
@@ -60,8 +99,8 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
         var config = new ConsumerConfig
         {
             BootstrapServers = _kafka.BootstrapServers,
-            GroupId = subscription.ConsumerGroup,
-            ClientId = $"{_kafka.ClientId}-{subscription.ConsumerGroup}",
+            GroupId = subscription.ResolvedConsumerGroup,
+            ClientId = $"{_kafka.ClientId}-{subscription.ResolvedConsumerGroup}",
 
             // Both false. Auto-commit acknowledges on a timer; auto-store marks
             // a message done the moment it is handed to us, before the handler
@@ -69,7 +108,8 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
             EnableAutoCommit = consumerOptions.EnableAutoCommit,
             EnableAutoOffsetStore = false,
 
-            AutoOffsetReset = Enum.Parse<AutoOffsetReset>(consumerOptions.AutoOffsetReset, ignoreCase: true),
+            AutoOffsetReset = Enum.Parse<AutoOffsetReset>(
+                subscription.AutoOffsetResetOverride ?? consumerOptions.AutoOffsetReset, ignoreCase: true),
             MaxPollIntervalMs = consumerOptions.MaxPollIntervalMs,
             SessionTimeoutMs = consumerOptions.SessionTimeoutMs,
             EnablePartitionEof = false
@@ -81,11 +121,11 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
                 subscription.Topic, error.Reason, error.IsFatal))
             .SetPartitionsAssignedHandler((_, partitions) => logger.LogInformation(
                 "Group {Group} assigned {Count} partition(s) of {Topic}: [{Partitions}]",
-                subscription.ConsumerGroup, partitions.Count, subscription.Topic,
+                subscription.ResolvedConsumerGroup, partitions.Count, subscription.Topic,
                 string.Join(", ", partitions.Select(p => p.Partition.Value))))
             .SetPartitionsRevokedHandler((_, partitions) => logger.LogInformation(
                 "Group {Group} revoked {Count} partition(s) of {Topic}",
-                subscription.ConsumerGroup, partitions.Count, subscription.Topic))
+                subscription.ResolvedConsumerGroup, partitions.Count, subscription.Topic))
             .Build();
 
         consumer.Subscribe(subscription.Topic);
@@ -94,11 +134,11 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
         // still visible as a consumer that stopped, rather than as one that
         // never existed.
         liveness.AllowPollInterval(TimeSpan.FromMilliseconds(consumerOptions.MaxPollIntervalMs));
-        liveness.Register(subscription.Topic, subscription.ConsumerGroup);
+        liveness.Register(subscription.Topic, subscription.ResolvedConsumerGroup);
 
         logger.LogInformation(
             "Consuming {Topic} as group {Group}. Manual offset commits every {Interval}ms or {Count} messages.",
-            subscription.Topic, subscription.ConsumerGroup,
+            subscription.Topic, subscription.ResolvedConsumerGroup,
             consumerOptions.CommitIntervalMs, consumerOptions.CommitEveryMessages);
 
         var sinceLastCommit = 0;
@@ -111,7 +151,7 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
                 // Reported before the poll, not after: a Consume() that
                 // blocks for its full timeout is normal, and waiting until it
                 // returns would make an idle topic look like a stall.
-                liveness.ReportPoll(subscription.Topic, subscription.ConsumerGroup, consumer.Assignment.Count);
+                liveness.ReportPoll(subscription.Topic, subscription.ResolvedConsumerGroup, consumer.Assignment.Count);
 
                 ConsumeResult<string, byte[]>? result;
 
@@ -168,7 +208,7 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
 
             // Deregistered so a container that is deliberately shutting down
             // does not report its own stopped consumer as a fault.
-            liveness.Deregister(subscription.Topic, subscription.ConsumerGroup);
+            liveness.Deregister(subscription.Topic, subscription.ResolvedConsumerGroup);
 
             logger.LogInformation("Consumer for {Topic} closed cleanly.", subscription.Topic);
         }

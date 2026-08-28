@@ -1,5 +1,5 @@
 import { Filter, ScrollText } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ENVIRONMENTS, TIME_RANGES, useSession } from '../app/session'
 import { Button } from '../components/ui/Button'
@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from '../components/ui/States'
 import { LogTable } from '../features/logs/LogTable'
 import type { ApiError } from '../lib/api/client'
 import { useLogs, useServices, windowMinutesFor } from '../lib/api/queries'
+import { useRealtime } from '../lib/realtime'
 import { useQueryParams } from '../lib/useQueryParams'
 
 /**
@@ -35,6 +36,17 @@ const LEVEL_OPTIONS = [
 export default function LogsPage() {
   const { environment, timeRange } = useSession()
   const [params, setParams] = useQueryParams(DEFAULTS)
+  const { status: realtimeStatus, onIncidentDetected } = useRealtime()
+
+  // Off by default. Tailing while reading is actively hostile - the list moves
+  // under the cursor - so it is something you turn on to watch, not the state
+  // you arrive in.
+  const [tailRequested, setTailRequested] = useState(false)
+
+  // Tailing without a connection is a button claiming to do something it
+  // cannot. Derived rather than switched off in an effect, so there is never a
+  // render where it says it is tailing and is not.
+  const tailing = tailRequested && realtimeStatus === 'live'
 
   const services = useServices()
 
@@ -51,6 +63,28 @@ export default function LogsPage() {
     () => query.data?.pages.flatMap((page) => page.page.items) ?? [],
     [query.data],
   )
+
+  /**
+   * Live tail, driven by the hub rather than by a timer.
+   *
+   * The hub announces incidents, not individual log lines - pushing every line
+   * of a 46,000/sec stream to a browser would be its own outage. An incident is
+   * the signal that something worth looking at just happened, so the tail
+   * refetches the newest page on that signal. It is coarser than a true tail
+   * and honest about latency, where a 1s poll would look live and cost far more.
+   */
+  const refetch = query.refetch
+
+  useEffect(() => {
+    if (!tailing) return
+
+    // refetch rather than the query object: react-query returns a new object
+    // every render, so depending on it would tear down and re-subscribe the
+    // hub handler on each one.
+    return onIncidentDetected(() => {
+      void refetch()
+    })
+  }, [tailing, onIncidentDetected, refetch])
 
   const window = query.data?.pages[0]?.window
   const environmentLabel =
@@ -110,8 +144,20 @@ export default function LogsPage() {
             : `${environmentLabel} · ${rangeLabel.toLowerCase()}`
         }
         actions={
-          <Button disabled title="Live tail arrives with the SignalR hub">
-            ● Live tail
+          <Button
+            variant={tailing ? 'primary' : 'default'}
+            disabled={realtimeStatus !== 'live'}
+            onClick={() => setTailRequested((on) => !on)}
+            aria-pressed={tailing}
+            title={
+              realtimeStatus === 'live'
+                ? tailing
+                  ? 'Pause live tail'
+                  : 'Refresh automatically as incidents are detected'
+                : 'Live tail needs the realtime connection, which is not currently open.'
+            }
+          >
+            {tailing ? '❚❚ Pause tail' : '● Live tail'}
           </Button>
         }
       />

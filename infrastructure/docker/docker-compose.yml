@@ -241,10 +241,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       IncidentIQ__LogFormat: ${LOG_FORMAT:-json}
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # The API reads Kafka for one purpose only: pushing pipeline events to
+      # connected dashboards over the hub. It produces nothing and does no work
+      # on them, so a Kafka outage costs live updates and nothing else - which
+      # is why readiness still does not depend on the broker here.
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: incidentiq-api
       # The query API authenticates with the same keys as ingestion, so a key
       # issued to an organization reads only that organization's incidents.
       Ingestion__ApiKeys__Keys__0__KeyHash: ${INGESTION_API_KEY_HASH}

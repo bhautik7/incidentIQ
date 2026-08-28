@@ -3,15 +3,14 @@ import { Bell, Search } from 'lucide-react'
 import { ENVIRONMENTS, TIME_RANGES, useSession } from '../../app/session'
 import type { EnvironmentKey, TimeRangeKey } from '../../app/session'
 import { cn } from '../../lib/cn'
+import { useRealtime, type RealtimeStatus } from '../../lib/realtime'
 import { HealthDot, type Health } from '../ui/Badge'
 import { Select } from '../ui/Select'
 
 export function TopBar({
-  systemHealth = 'Unknown',
   unreadNotifications = 0,
   onOpenSearch,
 }: {
-  systemHealth?: Health
   unreadNotifications?: number
   onOpenSearch: () => void
 }) {
@@ -64,12 +63,11 @@ export function TopBar({
 
         <div className="mx-1 h-5 w-px bg-line" aria-hidden />
 
-        <span
-          className="hidden items-center gap-1.5 text-[11px] sm:inline-flex"
-          title="Platform status"
-        >
-          <HealthDot health={systemHealth} />
-        </span>
+        {/* What this dot means changed with the hub: it used to be a
+            placeholder reading "Unknown". It now reports whether the dashboard
+            is receiving live updates, which is the thing a reader needs to know
+            before trusting what is on screen. */}
+        <RealtimeIndicator />
 
         <button
           type="button"
@@ -95,5 +93,41 @@ export function TopBar({
         </button>
       </div>
     </header>
+  )
+}
+
+
+const REALTIME_LABEL: Record<RealtimeStatus, { health: Health; text: string; title: string }> = {
+  live: { health: 'Healthy', text: 'Live', title: 'Receiving live updates.' },
+  connecting: { health: 'Unknown', text: 'Connecting', title: 'Opening the live connection.' },
+  reconnecting: {
+    health: 'Degraded',
+    text: 'Reconnecting',
+    title: 'The live connection dropped. Reconnecting; the page is polling meanwhile.',
+  },
+  offline: {
+    health: 'Critical',
+    text: 'Not live',
+    title: 'No live connection. The page is polling every 15 seconds instead.',
+  },
+}
+
+/**
+ * Whether what is on screen is arriving live.
+ *
+ * Worth a permanent slot in the top bar rather than a transient toast: during an
+ * incident, "is this current?" is a question someone asks of every number they
+ * are looking at, and a dashboard that quietly stopped updating is the failure
+ * this is here to make visible.
+ */
+function RealtimeIndicator() {
+  const { status } = useRealtime()
+  const label = REALTIME_LABEL[status]
+
+  return (
+    <span className="hidden items-center gap-1.5 text-[11px] sm:inline-flex" title={label.title}>
+      <HealthDot health={label.health} label={false} />
+      <span className="text-ink-muted">{label.text}</span>
+    </span>
   )
 }

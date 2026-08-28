@@ -49,7 +49,9 @@ public static class MessagingServiceCollectionExtensions
         this IServiceCollection services,
         string topic,
         string consumerGroup,
-        string? deadLetterTopic = null)
+        string? deadLetterTopic = null,
+        bool broadcastToEveryInstance = false,
+        string? autoOffsetReset = null)
         where THandler : class, IEventHandler<TPayload>
     {
         AddConsumerLiveness(services);
@@ -59,7 +61,9 @@ public static class MessagingServiceCollectionExtensions
         {
             Topic = topic,
             ConsumerGroup = consumerGroup,
-            DeadLetterTopic = deadLetterTopic
+            DeadLetterTopic = deadLetterTopic,
+            BroadcastToEveryInstance = broadcastToEveryInstance,
+            AutoOffsetResetOverride = autoOffsetReset
         });
 
         services.AddHostedService<KafkaConsumerService<TPayload, THandler>>();

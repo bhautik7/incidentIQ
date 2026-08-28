@@ -20,6 +20,21 @@ public sealed class ApiKeyAuthenticationOptions
     /// parameter rather than a constant.
     /// </summary>
     public string[] ProtectedPathPrefixes { get; set; } = [];
+
+    /// <summary>
+    /// Prefixes where the key may also arrive as an <c>access_token</c> query
+    /// parameter instead of a header.
+    ///
+    /// This exists for exactly one reason: a browser cannot set headers on a
+    /// WebSocket handshake, so a hub cannot be reached with <c>X-Api-Key</c> at
+    /// all. It is opt-in per prefix rather than global because a credential in a
+    /// URL is genuinely worse - URLs reach proxy logs, browser history and
+    /// referrer headers in a way headers do not.
+    ///
+    /// Serilog's request logging records <c>RequestPath</c>, which excludes the
+    /// query string, so the key is not written to this service's own logs.
+    /// </summary>
+    public string[] QueryStringAuthenticatedPrefixes { get; set; } = [];
 }
 
 public sealed class ApiKeyAuthenticationMiddleware(
@@ -29,6 +44,11 @@ public sealed class ApiKeyAuthenticationMiddleware(
 {
     public const string ApiKeyHeader = "X-Api-Key";
     public const string CorrelationIdHeader = "X-Correlation-Id";
+
+    /// <summary>The name SignalR's JavaScript client uses for its access token.</summary>
+    public const string AccessTokenQueryParameter = "access_token";
+
+    private const string BearerPrefix = "Bearer ";
 
     public async Task InvokeAsync(HttpContext context, IApiKeyResolver resolver)
     {
@@ -48,6 +68,28 @@ public sealed class ApiKeyAuthenticationMiddleware(
         }
 
         var apiKey = context.Request.Headers[ApiKeyHeader].ToString();
+
+        if (string.IsNullOrWhiteSpace(apiKey)
+            && options.Value.QueryStringAuthenticatedPrefixes
+                .Any(prefix => context.Request.Path.StartsWithSegments(prefix)))
+        {
+            // A hub connection presents its key two different ways over its
+            // life, and both have to be accepted or it fails halfway through
+            // connecting:
+            //
+            //   negotiate  - an ordinary POST, so the client sends a bearer
+            //                header and never touches the query string;
+            //   websocket  - a handshake the browser will not let it add
+            //                headers to, so the token moves to the URL.
+            //
+            // Checked only after X-Api-Key, so a normal caller never ends up
+            // authenticating from a URL.
+            var bearer = context.Request.Headers.Authorization.ToString();
+
+            apiKey = bearer.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase)
+                ? bearer[BearerPrefix.Length..].Trim()
+                : context.Request.Query[AccessTokenQueryParameter].ToString();
+        }
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {

@@ -27,6 +27,32 @@ public static class AuthServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Guards these prefixes, and additionally lets them authenticate with an
+    /// <c>access_token</c> query parameter.
+    ///
+    /// For hubs only: a browser cannot put a header on a WebSocket handshake.
+    /// Kept as a separate call so that opting a path into URL credentials is a
+    /// deliberate act rather than something inherited by every route.
+    /// </summary>
+    public static IServiceCollection AddIncidentIqApiKeyAuth(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string[] protectedPathPrefixes,
+        string[] queryStringAuthenticatedPrefixes)
+    {
+        services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
+        services.Configure<ApiKeyAuthenticationOptions>(options =>
+        {
+            options.ProtectedPathPrefixes = protectedPathPrefixes;
+            options.QueryStringAuthenticatedPrefixes = queryStringAuthenticatedPrefixes;
+        });
+
+        services.AddSingleton<IApiKeyResolver, ConfiguredApiKeyResolver>();
+
+        return services;
+    }
+
     public static IApplicationBuilder UseIncidentIqApiKeyAuth(this IApplicationBuilder app) =>
         app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
 }

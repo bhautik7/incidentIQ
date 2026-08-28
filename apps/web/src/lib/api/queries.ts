@@ -11,7 +11,20 @@ import type {
   ServiceHealth,
   ServiceSummary,
 } from '../../types/api'
+import { useIsLive } from '../realtime'
 import { apiGet, apiPost, toQuery } from './client'
+
+/**
+ * How often to poll, given whether the hub is delivering.
+ *
+ * Polling is the fallback, not the mechanism. While the hub is live the server
+ * says when something changed and a timer adds nothing but load; when it is not,
+ * a dashboard that quietly stopped updating during an outage would be worse
+ * than a slightly noisy one, so the timer comes back.
+ */
+function useRefreshInterval(): number | false {
+  return useIsLive() ? false : 15_000
+}
 
 export function windowMinutesFor(range: TimeRangeKey): number {
   return TIME_RANGES.find((option) => option.key === range)?.minutes ?? 1440
@@ -62,7 +75,7 @@ export function useOverview(environment: EnvironmentKey, range: TimeRangeKey) {
       ),
     // The dashboard is watched during an outage; a minute-old count is worse
     // than a brief loading shimmer.
-    refetchInterval: 15_000,
+    refetchInterval: useRefreshInterval(),
   })
 }
 
@@ -74,7 +87,7 @@ export function useServiceHealth(environment: EnvironmentKey, range: TimeRangeKe
         `/api/v1/services/health${toQuery({ windowMinutes: windowMinutesFor(range), environment })}`,
         signal,
       ),
-    refetchInterval: 15_000,
+    refetchInterval: useRefreshInterval(),
   })
 }
 
@@ -116,7 +129,7 @@ export function useIncidents(environment: EnvironmentKey, query: IncidentQuery) 
         signal,
       ),
     placeholderData: (previous) => previous,
-    refetchInterval: 15_000,
+    refetchInterval: useRefreshInterval(),
   })
 }
 
@@ -128,7 +141,7 @@ export function useActiveIncidents(environment: EnvironmentKey, pageSize = 8) {
         `/api/v1/incidents${toQuery({ status: 'active', environment, pageSize })}`,
         signal,
       ),
-    refetchInterval: 15_000,
+    refetchInterval: useRefreshInterval(),
   })
 }
 
@@ -143,7 +156,7 @@ export function useIncident(id: string) {
   return useQuery({
     queryKey: queryKeys.incident(id),
     queryFn: ({ signal }) => apiGet<IncidentDetail>(`/api/v1/incidents/${id}`, signal),
-    refetchInterval: 15_000,
+    refetchInterval: useRefreshInterval(),
   })
 }
 
