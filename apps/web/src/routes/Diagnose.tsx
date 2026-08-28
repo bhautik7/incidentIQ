@@ -1,6 +1,6 @@
-import { ArrowRight, FileUp, Stethoscope, Upload } from 'lucide-react'
+import { FileUp, Stethoscope, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 
 import { ENVIRONMENTS, useSession } from '../app/session'
 import { Button } from '../components/ui/Button'
@@ -57,21 +57,31 @@ export default function DiagnosePage() {
   const busy = state.stage === 'uploading' || state.stage === 'processing'
   const canSubmit = events.length > 0 && service.trim().length > 0 && !busy
 
-  // A freshly opened incident has nothing more to say here than its own page
-  // says better, so the user is taken there. An incident that was *already*
-  // open is a different answer - it means somebody is likely working on this
-  // already - and that sentence would be lost in a redirect, so it is shown.
+  /**
+   * The answer is always the incident page, whether this upload opened it or
+   * folded into one that was already open.
+   *
+   * Those two outcomes were briefly treated differently, on the argument that
+   * "somebody already has this" is worth saying. It is - but not at the cost of
+   * a button that redirects on some presses and not others. From the outside
+   * that is indistinguishable from a broken button, and the distinction is
+   * carried to the incident page instead, where there is room to say it
+   * properly.
+   */
   useEffect(() => {
-    if (state.result?.status === 'opened' && state.result.incidentId) {
-      void navigate(`/incidents/${state.result.incidentId}`)
+    const result = state.result
+
+    if (result?.incidentId && (result.status === 'opened' || result.status === 'existing')) {
+      void navigate(`/incidents/${result.incidentId}`, {
+        state: { foldedIn: result.status === 'existing', diagnoseMessage: result.message },
+      })
       return
     }
 
-    // The answer that does not redirect has to come and find the reader
-    // instead. On a wide viewport it appears in the right-hand column, which
-    // is not where someone who just pressed a button on the left is looking -
-    // and an answer nobody sees is indistinguishable from no answer at all.
-    if (state.result?.status === 'existing' || state.stage === 'error') {
+    // A failure has to come and find the reader: on a wide viewport it renders
+    // in the right-hand column, which is not where someone who just pressed a
+    // button on the left is looking.
+    if (state.stage === 'error') {
       answer.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [state.result, state.stage, navigate])
@@ -306,15 +316,6 @@ export default function DiagnosePage() {
             />
           ) : null}
 
-          {state.result?.status === 'existing' && state.result.incidentId ? (
-            <AlreadyOpen
-              incidentId={state.result.incidentId}
-              title={state.result.title}
-              message={state.result.message}
-              fingerprint={state.result.fingerprint}
-            />
-          ) : null}
-
           {state.ingestion && state.ingestion.rejected > 0 && (
             <div className="rounded-panel border border-sev-high/30 bg-sev-high/5 p-3">
               <p className="text-[12px] text-ink">
@@ -353,51 +354,6 @@ export default function DiagnosePage() {
         </section>
       </div>
     </>
-  )
-}
-
-/**
- * The answer when the pattern already had an incident.
- *
- * Shown rather than redirected past, because "somebody already has this" is a
- * genuinely different answer from "here is your new incident" and is usually
- * the more useful of the two.
- */
-function AlreadyOpen({
-  incidentId,
-  title,
-  message,
-  fingerprint,
-}: {
-  incidentId: string
-  title: string | null
-  message: string
-  fingerprint: string | null
-}) {
-  return (
-    <div className="rounded-panel border border-accent/40 bg-accent/5 p-3">
-      <p className="text-[12px] text-ink">{message}</p>
-      {title && <p className="mt-1 font-mono text-[12px] text-ink-muted">{title}</p>}
-
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        <Link
-          to={`/incidents/${incidentId}`}
-          className="inline-flex items-center gap-1 text-[12px] text-accent hover:underline"
-        >
-          Open the incident
-          <ArrowRight size={12} aria-hidden />
-        </Link>
-
-        {fingerprint && (
-          <Link
-            to={`/logs?fingerprint=${fingerprint}`}
-            className="text-[12px] text-ink-muted hover:text-ink hover:underline"
-          >
-            Show me the raw lines
-          </Link>
-        )}
-      </div>
-    </div>
   )
 }
 

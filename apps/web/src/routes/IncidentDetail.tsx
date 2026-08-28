@@ -1,6 +1,6 @@
 import { ArrowLeft, FileSearch, Rocket, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 
 import { SeverityBadge, StatusBadge, Tag } from '../components/ui/Badge'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -27,8 +27,15 @@ import type { SimilarIncident } from '../types/api'
  * On a narrow viewport the columns stack with the timeline second, because the
  * cause is what someone opens this page for.
  */
+/** What the diagnose page hands over when it redirects here. */
+type DiagnoseHandoff = { foldedIn?: boolean; diagnoseMessage?: string }
+
 export default function IncidentDetailPage() {
   const { incidentId = '' } = useParams()
+  // Router state rather than a query parameter: this is a one-time note about
+  // how the reader arrived, not part of the address of this incident, and a
+  // link copied out of the bar should not carry it to somebody else.
+  const handoff = (useLocation().state ?? {}) as DiagnoseHandoff
   const query = useIncident(incidentId)
   const members = useMembers()
   const action = useIncidentAction(incidentId)
@@ -120,6 +127,17 @@ export default function IncidentDetailPage() {
           <Meta label="Owner">{detail.owner?.displayName ?? 'Unassigned'}</Meta>
         </dl>
       </header>
+
+      {/* Said here, not on the upload page, because the upload page has
+          already redirected by the time it is true. Someone who pasted a log
+          expecting a fresh answer needs to know they are looking at a problem
+          that was already known - and probably already being worked on. */}
+      {handoff.foldedIn && (
+        <p className="mb-3 rounded-[4px] border border-accent/40 bg-accent/5 px-2.5 py-1.5 text-[12px] text-ink">
+          {handoff.diagnoseMessage
+            ?? 'An incident for this error was already open; your upload was folded into it.'}
+        </p>
+      )}
 
       <div className="mb-4">
         <IncidentActions
