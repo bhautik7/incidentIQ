@@ -77,7 +77,7 @@ public class HttpStatusExtractionTests
     }
 
     [Theory]
-    [InlineData(    , true)]
+    [InlineData(500, true)]
     [InlineData(503, true)]
     [InlineData(499, false)]
     [InlineData(404, false)]

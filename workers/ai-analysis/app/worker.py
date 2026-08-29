@@ -1,5 +1,6 @@
 """The analysis worker: consume a request, run the pipeline, announce the result."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
@@ -37,6 +38,12 @@ SIMILAR_INCIDENTS_FOUND = Histogram(
 )
 
 
+#: Backoff between restarts of a crashed consume loop. Short at first because
+#: most crashes are a dependency blinking, longer after that so a genuinely
+#: broken worker does not spin.
+RESTART_DELAYS = [1, 5, 15, 30]
+
+
 class AnalysisWorker:
     def __init__(
         self,
@@ -50,8 +57,18 @@ class AnalysisWorker:
         self._pipeline = pipeline
         self._producer = producer
 
-        self._consumer = EventConsumer(
-            settings,
+        self._stopping = False
+        self._consumer = self._build_consumer()
+
+    def _build_consumer(self) -> EventConsumer:
+        """A fresh consumer.
+
+        Rebuilt rather than reused after a crash: a client that failed fatally
+        stays failed, and reusing it would restart the loop around the same
+        corpse.
+        """
+        return EventConsumer(
+            self._settings,
             topic=Topics.INCIDENTS_ANALYSIS_REQUESTED,
             handler=self._handle,
             # The incident path's own dead-letter topic. This used to point at
@@ -59,13 +76,50 @@ class AnalysisWorker:
             # that will never be explained - was filed among millions of dead
             # log lines and triaged by nobody.
             dead_letter_topic=Topics.INCIDENTS_FAILED,
-            producer=producer,
+            producer=self._producer,
         )
 
     async def run(self) -> None:
-        await self._consumer.run()
+        """Consume, and keep consuming.
+
+        The consume loop used to be the whole of this method, which meant any
+        exception escaping it ended the worker permanently while the process
+        went on answering health checks - the group emptied, lag stopped
+        moving, and nothing said why. Restarting here turns that into a gap of
+        seconds, and the log line above the restart is the evidence that was
+        previously lost.
+        """
+        restarts = 0
+
+        while not self._stopping:
+            try:
+                await self._consumer.run()
+
+                # A clean return means stop() was called.
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:  # noqa: BLE001
+                if self._stopping:
+                    return
+
+                delay = RESTART_DELAYS[min(restarts, len(RESTART_DELAYS) - 1)]
+                restarts += 1
+
+                logger.error(
+                    "consumer_crashed_restarting",
+                    error=str(error),
+                    restarts=restarts,
+                    delay_seconds=delay,
+                    exc_info=True,
+                )
+
+                self._consumer = self._build_consumer()
+
+                await asyncio.sleep(delay)
 
     def stop(self) -> None:
+        self._stopping = True
         self._consumer.stop()
 
     async def _handle(self, envelope_json: dict, headers: dict[str, str]) -> None:

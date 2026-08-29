@@ -57,6 +57,26 @@ class Runtime:
 runtime = Runtime()
 
 
+def _report_worker_exit(task: asyncio.Task) -> None:
+    """Retrieve whatever ended the worker task and say so.
+
+    Retrieving the exception is the point: an unretrieved one is reported by
+    the interpreter at an arbitrary later moment, if at all, and never with the
+    context of which consumer it was.
+    """
+    if task.cancelled():
+        log.info("ai_analysis.worker_cancelled")
+        return
+
+    error = task.exception()
+
+    if error is not None:
+        log.critical("ai_analysis.worker_died", error=str(error), exc_info=error)
+        return
+
+    log.warning("ai_analysis.worker_stopped")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("ai_analysis.starting", port=settings.port)
@@ -92,6 +112,15 @@ async def lifespan(app: FastAPI):
             )
 
             runtime.task = asyncio.create_task(runtime.worker.run())
+
+            # Without this the task is fire-and-forget, and a task nobody
+            # awaits takes its traceback with it when it dies: the process goes
+            # on answering health checks, the consumer group empties, and the
+            # only record is a "Task exception was never retrieved" warning at
+            # some later garbage collection. This consumer stopped twice and
+            # the cause was never established, and that is why.
+            runtime.task.add_done_callback(_report_worker_exit)
+
             log.info("ai_analysis.worker_started")
         except Exception as error:  # noqa: BLE001
             # A worker that cannot start must not take the process with it: the

@@ -31,6 +31,10 @@ class PermanentMessageError(Exception):
     """A message that can never succeed: malformed, unknown version, absent tenant."""
 
 
+class FatalConsumerError(Exception):
+    """The Kafka client is beyond recovery and has to be replaced."""
+
+
 class EventProducer:
     def __init__(self, settings: Settings) -> None:
         self._producer = Producer(
@@ -88,8 +92,15 @@ class EventConsumer:
         # topic.
         self._attempts: dict[tuple[str, int, int], int] = {}
 
+        #: Set from librdkafka's thread when the client is beyond recovery.
+        self._fatal_error = None
+
         self._consumer = Consumer(
             {
+                # Errors librdkafka raises on its own thread, which never reach
+                # the poll loop. A consumer that has been evicted says so here
+                # and nowhere else.
+                "error_cb": self._on_client_error,
                 "bootstrap.servers": settings.kafka_bootstrap_servers,
                 "group.id": settings.kafka_consumer_group,
                 "client.id": f"{settings.service_name}-consumer",
@@ -106,8 +117,56 @@ class EventConsumer:
             }
         )
 
+    def _on_client_error(self, error) -> None:
+        """librdkafka's own view of the connection.
+
+        A fatal error is terminal for this client: poll() goes on returning
+        nothing forever, so from inside the loop everything looks fine while
+        the group has no members. Logged at critical because that is the line
+        that explains a consumer which has quietly stopped.
+        """
+        if error.fatal():
+            logger.critical(
+                "kafka_client_fatal_error",
+                topic=self._topic,
+                group=self._settings.kafka_consumer_group,
+                code=str(error.code()),
+                reason=error.str(),
+            )
+            self._fatal_error = error
+            return
+
+        logger.warning(
+            "kafka_client_error",
+            topic=self._topic,
+            code=str(error.code()),
+            reason=error.str(),
+        )
+
+    def _on_assign(self, _consumer, partitions) -> None:
+        logger.info(
+            "partitions_assigned",
+            topic=self._topic,
+            group=self._settings.kafka_consumer_group,
+            partitions=[p.partition for p in partitions],
+        )
+
+    def _on_revoke(self, _consumer, partitions) -> None:
+        # Recorded with offsets, because a revoke handing back partitions at
+        # the offsets they were assigned at is a consumer that did no work
+        # between two rebalances - the shape of a poll-interval eviction rather
+        # than a deployment.
+        logger.warning(
+            "partitions_revoked",
+            topic=self._topic,
+            group=self._settings.kafka_consumer_group,
+            partitions=[f"{p.partition}@{p.offset}" for p in partitions],
+        )
+
     async def run(self) -> None:
-        self._consumer.subscribe([self._topic])
+        self._consumer.subscribe(
+            [self._topic], on_assign=self._on_assign, on_revoke=self._on_revoke
+        )
 
         # Registered before the first poll, so a loop that dies immediately
         # still reads as a consumer that stopped rather than one that never was.
@@ -128,6 +187,12 @@ class EventConsumer:
 
                 # poll() blocks, so it runs on a worker thread to keep the
                 # event loop free for FastAPI's health endpoints.
+                if self._fatal_error is not None:
+                    # Nothing this loop can do; poll() will return nothing for
+                    # as long as it runs. Raised so the supervisor above sees a
+                    # reason and rebuilds, rather than spinning on a dead client.
+                    raise FatalConsumerError(str(self._fatal_error))
+
                 message = await asyncio.to_thread(self._consumer.poll, 0.5)
 
                 if message is None:
@@ -139,7 +204,23 @@ class EventConsumer:
                     logger.warning("consumer_error", error=str(message.error()))
                     continue
 
-                await self._handle(message)
+                try:
+                    await self._handle(message)
+                except Exception:  # noqa: BLE001
+                    # _handle deals with handler failures itself, so reaching
+                    # here means the failure was in the machinery around them -
+                    # a dead-letter publish onto a full producer queue, a
+                    # commit against a client that has gone away. Before this,
+                    # such a failure escaped the loop and killed the task, and
+                    # the task was created fire-and-forget, so the traceback
+                    # went with it. That is why this consumer stopped twice
+                    # without anyone learning why.
+                    logger.exception(
+                        "consumer_loop_error",
+                        topic=self._topic,
+                        partition=message.partition(),
+                        offset=message.offset(),
+                    )
         finally:
             # Leave the group deliberately rather than waiting out the session
             # timeout, so a replacement picks up these partitions in seconds.

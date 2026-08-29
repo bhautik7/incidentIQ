@@ -88,12 +88,68 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
 {
     private readonly KafkaOptions _kafka = kafkaOptions.Value;
 
+    /// <summary>Backoff between rebuilds after a fatal client error.</summary>
+    private static readonly TimeSpan[] RebuildDelays =
+    [
+        TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30)
+    ];
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Consume() blocks. Yield first so host startup is not held up by this
         // service, then run the loop on our own thread-pool thread.
         await Task.Yield();
 
+        var rebuilds = 0;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            var fatal = await RunConsumerAsync(stoppingToken);
+
+            if (!fatal || stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // A fatal error puts librdkafka's client into a state it never
+            // leaves. Consume() goes on returning null forever, so the loop
+            // looks healthy from inside the process while the group has no
+            // members and lag sits unchanged - which is exactly what was
+            // observed when incident-detector went quiet and
+            // incident-processor, in the same container, did not.
+            //
+            // The client cannot be revived, so it is replaced. Rebuilding this
+            // one consumer rather than faulting the service keeps its siblings
+            // running: they have their own clients and there is nothing wrong
+            // with them.
+            var delay = RebuildDelays[Math.Min(rebuilds, RebuildDelays.Length - 1)];
+            rebuilds++;
+
+            logger.LogWarning(
+                "Rebuilding the consumer for {Topic} after a fatal client error (rebuild {Count}, waiting {Delay}s).",
+                subscription.Topic, rebuilds, delay.TotalSeconds);
+
+            try
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One consumer, from subscribe to close.
+    /// </summary>
+    /// <returns>
+    /// True when the loop ended because the client is fatally broken and must
+    /// be replaced; false when it ended for any ordinary reason.
+    /// </returns>
+    private async Task<bool> RunConsumerAsync(CancellationToken stoppingToken)
+    {
         var consumerOptions = _kafka.Consumer;
 
         var config = new ConsumerConfig
@@ -115,17 +171,44 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
             EnablePartitionEof = false
         };
 
+        // Set from librdkafka's own thread, read by the loop. A fatal error is
+        // terminal for this client: every later Consume() returns nothing, and
+        // logging it at warning - as this did - buried the one line that
+        // explained why a consumer had gone silent among ordinary transient
+        // noise.
+        var fatalError = false;
+
         using var consumer = new ConsumerBuilder<string, byte[]>(config)
-            .SetErrorHandler((_, error) => logger.LogWarning(
-                "Kafka consumer error on {Topic}: {Reason} (fatal={Fatal})",
-                subscription.Topic, error.Reason, error.IsFatal))
+            .SetErrorHandler((_, error) =>
+            {
+                if (error.IsFatal)
+                {
+                    fatalError = true;
+
+                    logger.LogCritical(
+                        "Fatal Kafka client error on {Topic} as group {Group}: {Code} {Reason}. "
+                        + "This client cannot recover and will be rebuilt.",
+                        subscription.Topic, subscription.ResolvedConsumerGroup, error.Code, error.Reason);
+
+                    return;
+                }
+
+                logger.LogWarning(
+                    "Kafka consumer error on {Topic}: {Code} {Reason}",
+                    subscription.Topic, error.Code, error.Reason);
+            })
             .SetPartitionsAssignedHandler((_, partitions) => logger.LogInformation(
                 "Group {Group} assigned {Count} partition(s) of {Topic}: [{Partitions}]",
                 subscription.ResolvedConsumerGroup, partitions.Count, subscription.Topic,
                 string.Join(", ", partitions.Select(p => p.Partition.Value))))
             .SetPartitionsRevokedHandler((_, partitions) => logger.LogInformation(
-                "Group {Group} revoked {Count} partition(s) of {Topic}",
-                subscription.ResolvedConsumerGroup, partitions.Count, subscription.Topic))
+                // The offsets matter here. A revoke that hands back partitions
+                // at the same offsets they were assigned at is a consumer that
+                // did no work between two rebalances, which is the shape of a
+                // poll-interval eviction rather than a deployment.
+                "Group {Group} revoked {Count} partition(s) of {Topic}: [{Partitions}]",
+                subscription.ResolvedConsumerGroup, partitions.Count, subscription.Topic,
+                string.Join(", ", partitions.Select(p => $"{p.Partition.Value}@{p.Offset.Value}"))))
             .Build();
 
         consumer.Subscribe(subscription.Topic);
@@ -146,7 +229,7 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
 
         try
         {
-            while (!stoppingToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested && !fatalError)
             {
                 // Reported before the poll, not after: a Consume() that
                 // blocks for its full timeout is normal, and waiting until it
@@ -210,8 +293,10 @@ public sealed class KafkaConsumerService<TPayload, THandler>(
             // does not report its own stopped consumer as a fault.
             liveness.Deregister(subscription.Topic, subscription.ResolvedConsumerGroup);
 
-            logger.LogInformation("Consumer for {Topic} closed cleanly.", subscription.Topic);
+            logger.LogInformation("Consumer for {Topic} closed.", subscription.Topic);
         }
+
+        return fatalError;
     }
 
     private async Task ProcessAsync(
