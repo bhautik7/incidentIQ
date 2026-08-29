@@ -24,6 +24,7 @@ Or drive it from the shell:
 ./scripts/upload-log.py samples/payments-api.log --replay-as-now --watch
 ./scripts/show-analysis.sh --watch                       # patterns -> incidents -> analysis
 ./scripts/show-analysis.sh --reset                       # clear pipeline data, keep services
+./scripts/record-deployment.sh -s payments-api -v 2.8.4  # tell it a release shipped
 ```
 
 ## Ports
@@ -161,10 +162,12 @@ nginx, so everyone who opens it shares one organization's data. Tenant
 isolation is enforced in the schema and in EF's query filters, but there is no
 sign-up flow in front of it.
 
-Nothing registers deployments. Correlating a release with an incident is
-implemented end to end and produces the most useful sentence the system can
-write, but no code inserts a `deployments` row, so it only fires against seeded
-data.
+Deployments are recorded by `POST /api/v1/deployments`, or by
+`./scripts/record-deployment.sh` as the last step of a deploy job. Nothing
+calls it automatically, so a release that is not reported cannot be
+correlated - and correlation is worth more than anything else the analysis
+has. Recording one moved a test incident from 40% confidence and a symptom to
+68% and "version 3.1.0 shipped 7.2 minutes before the first occurrence".
 
 Kafka consumers have twice dropped out of their group and not rejoined.
 Readiness now catches it and names the group, but the cause is not understood.
