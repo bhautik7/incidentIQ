@@ -266,3 +266,17 @@ export interface DiagnoseResult {
   /** Written to be shown to the person waiting. */
   message: string
 }
+
+/**
+ * Who the API key resolves to.
+ *
+ * There is no login, so this is not a session in the usual sense - it is the
+ * only identity the system has. `actor` is the person incident actions are
+ * recorded against, and is null when the key is bound to no user, which is
+ * exactly when those actions return 403.
+ */
+export interface CurrentSession {
+  organization: { id: string; name: string; slug: string } | null
+  actor: { userId: string; displayName: string; email: string } | null
+  apiKeyName: string
+}

@@ -4,6 +4,7 @@ import { NavLink } from 'react-router'
 
 import { NAV_GROUPS } from '../../app/navigation'
 import { useSession } from '../../app/session'
+import { useCurrentSession } from '../../lib/api/queries'
 import { cn } from '../../lib/cn'
 
 /** Counts shown against nav items. Wired to live data in a later phase. */
@@ -40,6 +41,14 @@ export function Sidebar({ badges = {} }: { badges?: NavBadges }) {
   // The stored preference still applies on a wide screen; a narrow one simply
   // has no room for the expanded state, whatever was chosen earlier.
   const collapsed = sidebarCollapsed || isNarrow
+
+  const session = useCurrentSession()
+
+  // Falls back to the key's own name rather than to a person's. Inventing a
+  // name here is what this replaced.
+  const organizationName = session.data?.organization?.name ?? session.data?.apiKeyName ?? '—'
+
+  const actorFallback = session.isPending ? '…' : 'No user bound to this key'
 
   return (
     <nav
@@ -125,14 +134,15 @@ export function Sidebar({ badges = {} }: { badges?: NavBadges }) {
             'transition-quick hover:bg-raised',
             collapsed && 'justify-center',
           )}
-          aria-label="Switch organization"
+          aria-label="Organization"
+          title={organizationName}
         >
           <span className="grid h-5 w-5 shrink-0 place-items-center rounded-[3px] bg-accent-soft text-[10px] font-semibold text-accent">
-            A
+            {initials(organizationName).slice(0, 1)}
           </span>
           {!collapsed && (
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] text-ink">Acme Corp</span>
+              <span className="block truncate text-[12px] text-ink">{organizationName}</span>
               <span className="block truncate text-[10px] text-ink-subtle">Organization</span>
             </span>
           )}
@@ -144,12 +154,32 @@ export function Sidebar({ badges = {} }: { badges?: NavBadges }) {
             collapsed ? 'flex-col' : 'justify-between',
           )}
         >
-          <div className={cn('flex min-w-0 items-center gap-2 px-1.5', collapsed && 'px-0')}>
-            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-raised text-[10px] font-medium text-ink-muted">
-              BS
+          {/* The person actions are recorded against, not whoever is holding
+              the keyboard. There is no login: the API key decides, and naming
+              anybody else here would mean the page says one name while the
+              incident timeline says another. */}
+          <div
+            className={cn('flex min-w-0 items-center gap-2 px-1.5', collapsed && 'px-0')}
+            title={
+              session.data?.actor
+                ? `${session.data.actor.displayName} · ${session.data.actor.email}. Actions are recorded against this user.`
+                : 'This API key is not bound to a user, so incident actions will be refused.'
+            }
+          >
+            <span
+              className={cn(
+                'grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-medium',
+                session.data?.actor
+                  ? 'bg-raised text-ink-muted'
+                  : 'bg-sev-high/15 text-sev-high',
+              )}
+            >
+              {session.data?.actor ? initials(session.data.actor.displayName) : '?'}
             </span>
             {!collapsed && (
-              <span className="truncate text-[11px] text-ink-muted">Bhautik S.</span>
+              <span className="truncate text-[11px] text-ink-muted">
+                {session.data?.actor?.displayName ?? actorFallback}
+              </span>
             )}
           </div>
 
@@ -175,4 +205,20 @@ export function Sidebar({ badges = {} }: { badges?: NavBadges }) {
       </div>
     </nav>
   )
+}
+
+/**
+ * Initials from a display name.
+ *
+ * Two letters where there are two words, one where there is one. Deliberately
+ * naive: a name is whatever the users table says, and guessing harder at how
+ * to abbreviate somebody's name is a good way to get it wrong.
+ */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+
+  if (words.length === 0) return '?'
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }

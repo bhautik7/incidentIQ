@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { TIME_RANGES, type EnvironmentKey, type TimeRangeKey } from '../../app/session'
 import type {
+  CurrentSession,
   IncidentDetail,
   IncidentListItem,
   OrganizationMember,
@@ -48,6 +49,7 @@ export const queryKeys = {
   services: () => ['services'] as const,
   logs: (environment: EnvironmentKey, filters: object) => ['logs', environment, filters] as const,
   members: () => ['members'] as const,
+  session: () => ['session'] as const,
 }
 
 /**
@@ -157,6 +159,22 @@ export function useIncident(id: string) {
     queryKey: queryKeys.incident(id),
     queryFn: ({ signal }) => apiGet<IncidentDetail>(`/api/v1/incidents/${id}`, signal),
     refetchInterval: useRefreshInterval(),
+  })
+}
+
+/**
+ * Who this dashboard is acting as.
+ *
+ * Cached hard: it is fixed by the API key the container was started with and
+ * cannot change without a restart. It is fetched at all because the sidebar
+ * used to state an organization and a person as literals, and named someone
+ * other than the user its actions were recorded against.
+ */
+export function useCurrentSession() {
+  return useQuery({
+    queryKey: queryKeys.session(),
+    queryFn: ({ signal }) => apiGet<CurrentSession>('/api/v1/me', signal),
+    staleTime: Infinity,
   })
 }
 

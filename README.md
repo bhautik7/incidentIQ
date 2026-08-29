@@ -160,7 +160,9 @@ docker compose -f infrastructure/docker/docker-compose.yml up -d --build web
 ```
 
 There is no login. The dashboard authenticates with a single API key held by
-nginx, so everyone who opens it shares one organization's data. Tenant
+nginx, so everyone who opens it shares one organization's data. `GET
+/api/v1/me` reports which organization and which user that key acts as - the
+sidebar shows it rather than asserting an identity of its own. Tenant
 isolation is enforced in the schema and in EF's query filters, but there is no
 sign-up flow in front of it.
 

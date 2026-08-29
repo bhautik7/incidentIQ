@@ -118,6 +118,7 @@ app.MapIncidentEndpoints();
 app.MapIncidentActionEndpoints();
 app.MapDiagnoseEndpoints();
 app.MapDeploymentEndpoints();
+app.MapSessionEndpoints();
 app.MapLogEndpoints();
 
 // Guarded by the same middleware as the REST routes, so a connection arrives
