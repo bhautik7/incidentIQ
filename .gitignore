@@ -40,3 +40,12 @@ Thumbs.db
 
 # ---- docker volumes / local data ----
 infrastructure/docker/data/
+
+# Kept on disk, deliberately never committed.
+#
+# The handoff is the working record of this project: what is half-built, which
+# credentials have been mishandled, what is known to be weak and has not been
+# fixed yet. That is exactly what a maintainer needs and exactly what should
+# not be sitting in a repository's history, where deleting it later does not
+# remove it.
+docs/PROJECT_HANDOFF.md
