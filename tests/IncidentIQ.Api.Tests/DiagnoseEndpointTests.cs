@@ -21,7 +21,8 @@ namespace IncidentIQ.Api.Tests;
 /// and a second opener that does not respect the dedupe key would produce
 /// exactly the duplicate flood IncidentIQ exists to prevent.
 /// </summary>
-public sealed class DiagnoseEndpointTests : IAsyncLifetime
+[Collection(PostgresCollection.Name)]
+public sealed class DiagnoseEndpointTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private static readonly Guid Acme = new("aa111111-1111-1111-1111-111111111111");
     private static readonly Guid Globex = new("bb222222-2222-2222-2222-222222222222");
@@ -32,31 +33,22 @@ public sealed class DiagnoseEndpointTests : IAsyncLifetime
     private const string LoudFingerprint = "1111111111111111111111111111111111111111111111111111111111111111";
     private const string QuietFingerprint = "2222222222222222222222222222222222222222222222222222222222222222";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16")
-        .WithDatabase("incidentiq_diagnose_test")
-        .Build();
-
     private WebApplicationFactory<Program> _factory = null!;
     private string _connectionString = null!;
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
-        _connectionString = _postgres.GetConnectionString();
+        // Its own database inside the shared container, already migrated.
+        _connectionString = await postgres.CreateDatabaseAsync();
         _factory = new ApiFactory(_connectionString);
 
         await using var db = NewContext();
-        await db.Database.MigrateAsync();
 
         await SeedAsync(db, Acme, "acme", "payments-api");
         await SeedAsync(db, Globex, "globex", "payments-api");
     }
 
-    public async Task DisposeAsync()
-    {
-        await _factory.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _factory.DisposeAsync();
 
     /// <summary>
     /// A context scoped to one tenant, because the global query filter fails

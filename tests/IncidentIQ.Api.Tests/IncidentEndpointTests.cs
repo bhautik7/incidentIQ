@@ -23,7 +23,8 @@ namespace IncidentIQ.Api.Tests;
 /// query filters and the tenant the API key resolves to. That is the right
 /// design, and it is only safe if it is tested.
 /// </summary>
-public sealed class IncidentEndpointTests : IAsyncLifetime
+[Collection(PostgresCollection.Name)]
+public sealed class IncidentEndpointTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private static readonly Guid Acme = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Globex = new("22222222-2222-2222-2222-222222222222");
@@ -43,19 +44,18 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
     private const string GlobexKey = "iiq_test_globex_key";
     private const string InitechKey = "iiq_test_initech_key";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16")
-        .WithDatabase("incidentiq_api_test")
-        .Build();
-
+    private string _connectionString = null!;
     private WebApplicationFactory<Program> _factory = null!;
     private Guid _acmeIncidentId;
     private Guid _globexIncidentId;
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        // A database of this class's own inside the shared container, already
+        // migrated by the fixture.
+        _connectionString = await postgres.CreateDatabaseAsync();
 
-        var connectionString = _postgres.GetConnectionString();
+        var connectionString = _connectionString;
 
         _factory = new ApiFactory(connectionString);
 
@@ -64,8 +64,6 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
             .Options;
 
         await using var db = new IncidentIQDbContext(options, new StaticTenantContext(null));
-        await db.Database.MigrateAsync();
-
         _acmeIncidentId = await SeedAsync(db, Acme, "acme", "payments-api",
             "NpgsqlException: connection pool exhausted", IncidentSeverity.Critical, withAnalysis: true);
         _globexIncidentId = await SeedAsync(db, Globex, "globex", "shipping-api",
@@ -74,11 +72,7 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
         await SeedSortFixtureAsync(db);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _factory.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _factory.DisposeAsync();
 
     private sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
     {
@@ -620,7 +614,7 @@ public sealed class IncidentEndpointTests : IAsyncLifetime
         Assert.Equal(2, body.GetProperty("analysisVersion").GetInt32());
 
         var options = new DbContextOptionsBuilder<IncidentIQDbContext>()
-            .UseIncidentIQPostgres(_postgres.GetConnectionString())
+            .UseIncidentIQPostgres(_connectionString)
             .Options;
 
         await using var db = new IncidentIQDbContext(options, new StaticTenantContext(Acme));

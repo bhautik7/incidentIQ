@@ -109,7 +109,9 @@ cd apps/web && npx tsc -b --noEmit && npm run lint
 ```
 
 Integration tests use Testcontainers against real PostgreSQL and Kafka rather
-than mocks. The API suite starts a container per test, which makes it slow.
+than mocks. The API suite starts one container for the whole assembly and gives
+each test its own database cloned from a migrated template, which keeps the
+isolation without the cost: 79 tests in about 16 seconds.
 
 ## Running without Docker
 

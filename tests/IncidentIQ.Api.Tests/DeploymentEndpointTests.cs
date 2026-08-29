@@ -22,14 +22,11 @@ namespace IncidentIQ.Api.Tests;
 /// the correlation matters most shows "no deployment was correlated" for the
 /// incident the release actually caused.
 /// </summary>
-public sealed class DeploymentEndpointTests : IAsyncLifetime
+[Collection(PostgresCollection.Name)]
+public sealed class DeploymentEndpointTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private static readonly Guid Acme = new("cc111111-1111-1111-1111-111111111111");
     private const string AcmeKey = "iiq_test_deploy_acme";
-
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16")
-        .WithDatabase("incidentiq_deploy_test")
-        .Build();
 
     private WebApplicationFactory<Program> _factory = null!;
     private string _connectionString = null!;
@@ -38,12 +35,10 @@ public sealed class DeploymentEndpointTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
-        _connectionString = _postgres.GetConnectionString();
+        _connectionString = await postgres.CreateDatabaseAsync();
         _factory = new ApiFactory(_connectionString);
 
         await using var db = NewContext();
-        await db.Database.MigrateAsync();
 
         _serviceId = Guid.CreateVersion7();
         _environmentId = Guid.CreateVersion7();
@@ -60,11 +55,7 @@ public sealed class DeploymentEndpointTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public async Task DisposeAsync()
-    {
-        await _factory.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _factory.DisposeAsync();
 
     private IncidentIQDbContext NewContext(Guid? tenantId = null)
     {
