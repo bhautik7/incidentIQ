@@ -31,10 +31,24 @@ public static class Topics
     /// <summary>Result written back by the Python AI worker. Key: tenant:incident.</summary>
     public const string IncidentsAnalysisCompleted = "incidents.analysis.completed";
 
+    /// <summary>
+    /// Incident-path messages that could not be processed.
+    ///
+    /// Separate from <see cref="LogsFailed"/> rather than sharing it, because
+    /// the two hold different things and are triaged differently. A dead log
+    /// event is one observation among millions and is usually discarded after
+    /// a glance at why. A dead analysis request is one incident that will
+    /// never be explained until somebody notices, and its replay means
+    /// re-running an LLM call rather than re-inserting a row. Mixed into one
+    /// topic, the second is invisible among the first.
+    /// </summary>
+    public const string IncidentsFailed = "incidents.failed";
+
     public static readonly IReadOnlyList<string> All =
     [
         LogsRaw, LogsNormalized, LogsFailed, DeploymentsCreated,
-        IncidentsDetected, IncidentsAnalysisRequested, IncidentsAnalysisCompleted
+        IncidentsDetected, IncidentsAnalysisRequested, IncidentsAnalysisCompleted,
+        IncidentsFailed
     ];
 }
 

@@ -28,6 +28,11 @@ class Topics:
     INCIDENTS_ANALYSIS_REQUESTED = "incidents.analysis.requested"
     INCIDENTS_ANALYSIS_COMPLETED = "incidents.analysis.completed"
 
+    #: Dead letters from the incident path. Deliberately not LOGS_FAILED: an
+    #: analysis request that dies is one incident that never gets explained,
+    #: and it would be invisible among millions of dead log events.
+    INCIDENTS_FAILED = "incidents.failed"
+
 
 class EventTypes:
     LOG_RECEIVED = "log.received"

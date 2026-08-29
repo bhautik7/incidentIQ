@@ -7,6 +7,10 @@ behave the same way under the same failures:
   timer and silently loses in-flight work on a crash.
 - A permanent failure is dead-lettered rather than retried, because retrying a
   malformed message burns the partition forever.
+- A transient failure is retried by redelivery, but only so many times. An
+  unbounded retry is the same partition burn wearing a different name: the
+  failure that will never succeed and does not announce itself as permanent is
+  the common case, not the rare one.
 - Shutdown finishes the message in hand, commits, and closes the group cleanly.
 """
 
@@ -75,6 +79,14 @@ class EventConsumer:
         self._dead_letter_topic = dead_letter_topic
         self._producer = producer
         self._stopping = asyncio.Event()
+
+        # Redelivery counts, keyed by the message's position in the log.
+        #
+        # Only failing offsets are ever in here, and an entry is removed as
+        # soon as its message succeeds or is dead-lettered, so this holds a
+        # handful of entries in the worst case rather than growing with the
+        # topic.
+        self._attempts: dict[tuple[str, int, int], int] = {}
 
         self._consumer = Consumer(
             {
@@ -162,20 +174,52 @@ class EventConsumer:
                 offset=message.offset(),
                 reason=str(error),
             )
+            self._attempts.pop(
+                (message.topic(), message.partition(), message.offset()), None
+            )
             await self._dead_letter(message, str(error))
         except Exception as error:  # noqa: BLE001
-            # Transient. Do NOT store the offset: leaving it unstored is what
-            # makes Kafka redeliver, which is the retry.
+            position = (message.topic(), message.partition(), message.offset())
+            attempt = self._attempts.get(position, 0) + 1
+            self._attempts[position] = attempt
+
+            if attempt >= self._settings.kafka_max_delivery_attempts:
+                # Treated as permanent now, whatever it claimed to be. A
+                # transient failure that has not cleared in this many
+                # redeliveries is not going to, and every further retry is one
+                # more time this partition delivers nothing else - which on the
+                # analysis queue means every incident behind it goes unexplained
+                # while the same message fails again.
+                logger.error(
+                    "message_failed_permanently_after_retries",
+                    topic=message.topic(),
+                    partition=message.partition(),
+                    offset=message.offset(),
+                    attempts=attempt,
+                    error=str(error),
+                    exc_info=True,
+                )
+
+                self._attempts.pop(position, None)
+                await self._dead_letter(message, f"Failed {attempt} time(s): {error}")
+                self._store_and_commit(message)
+                return
+
+            # Do NOT store the offset: leaving it unstored is what makes Kafka
+            # redeliver, which is the retry.
             logger.error(
                 "message_failed_will_retry",
                 topic=message.topic(),
                 partition=message.partition(),
                 offset=message.offset(),
+                attempt=attempt,
+                max_attempts=self._settings.kafka_max_delivery_attempts,
                 error=str(error),
                 exc_info=True,
             )
             return
 
+        self._attempts.pop((message.topic(), message.partition(), message.offset()), None)
         self._store_and_commit(message)
 
     def _store_and_commit(self, message) -> None:

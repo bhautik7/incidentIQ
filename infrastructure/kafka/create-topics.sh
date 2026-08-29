@@ -54,6 +54,11 @@ echo "Incident pipeline  (key: tenantId:incidentId)"
 create_topic "incidents.detected"           3 "${RETENTION_7_DAYS}"  "published via the transactional outbox"
 create_topic "incidents.analysis.requested" 3 "${RETENTION_7_DAYS}"  "work queue for the Python AI worker"
 create_topic "incidents.analysis.completed" 3 "${RETENTION_7_DAYS}"  "analysis results announced"
+# One partition and long retention, for the same reasons as logs.failed: in a
+# healthy system it is empty, and nobody triages a dead-letter queue the day it
+# fills. Kept apart from logs.failed because one dead analysis request matters
+# far more than one dead log line, and would be lost among them.
+create_topic "incidents.failed"             1 "${RETENTION_30_DAYS}" "incident-path dead letters"
 
 echo
 echo "Topics now present:"

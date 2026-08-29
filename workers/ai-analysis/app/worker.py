@@ -54,7 +54,11 @@ class AnalysisWorker:
             settings,
             topic=Topics.INCIDENTS_ANALYSIS_REQUESTED,
             handler=self._handle,
-            dead_letter_topic=Topics.LOGS_FAILED,
+            # The incident path's own dead-letter topic. This used to point at
+            # LOGS_FAILED, which meant a dead analysis request - one incident
+            # that will never be explained - was filed among millions of dead
+            # log lines and triaged by nobody.
+            dead_letter_topic=Topics.INCIDENTS_FAILED,
             producer=producer,
         )
 

@@ -172,5 +172,9 @@ has. Recording one moved a test incident from 40% confidence and a symptom to
 Kafka consumers have twice dropped out of their group and not rejoined.
 Readiness now catches it and names the group, but the cause is not understood.
 
+Dead letters go to `logs.failed` for the log path and `incidents.failed` for
+the incident path. Nothing replays them automatically - a dead letter is read
+by a person, because the reason it died usually matters more than the message.
+
 Several dashboard pages (Services, Deployments, Analytics, Settings, Team,
 Alert Rules) are routed but not built. They are not linked from the navigation.

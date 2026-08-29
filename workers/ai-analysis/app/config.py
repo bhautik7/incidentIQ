@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     analysis_enabled: bool = Field(default=True, alias="ANALYSIS_ENABLED")
     kafka_consumer_group: str = Field(default="ai-enricher", alias="KAFKA_CONSUMER_GROUP")
 
+    #: Redeliveries of one message before it is dead-lettered as unprocessable.
+    #: Three, matching KafkaOptions.MaxRetryAttempts on the .NET side - the two
+    #: consumers have to behave the same way under the same failure.
+    kafka_max_delivery_attempts: int = Field(
+        default=3, ge=1, alias="KAFKA_MAX_DELIVERY_ATTEMPTS"
+    )
+
     #: Local sentence-transformers model. Chosen for size and speed rather than
     #: peak quality: 22M parameters, ~90MB, runs on CPU in single-digit
     #: milliseconds, and needs no API key and no network at inference time.
