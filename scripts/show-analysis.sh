@@ -21,7 +21,11 @@ psql_do() {
 reset_pipeline() {
     # Leaves organizations, services, environments and deployments in place -
     # only the data the pipeline produces is cleared.
-    psql_do -q -c "TRUNCATE log_events, log_patterns, log_pattern_metrics,
+    # raw_log_events belongs in this list. Left out, a reset clears the
+    # patterns while keeping every raw line that produced them, so the log
+    # explorer goes on showing lines whose pattern no longer exists and whose
+    # fingerprint filter matches nothing.
+    psql_do -q -c "TRUNCATE log_events, raw_log_events, log_patterns, log_pattern_metrics,
                             processed_events, incidents, incident_events,
                             outbox_messages, ai_analyses RESTART IDENTITY CASCADE;" >/dev/null 2>&1
     echo "Pipeline data cleared. Services, environments and deployments kept."
