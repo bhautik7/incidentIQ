@@ -30,7 +30,19 @@ class _Model(BaseModel):
 
 
 class PatternEvidence(_Model):
-    """A log pattern that belongs to this incident."""
+    """A log pattern relevant to this incident.
+
+    Not necessarily one the incident is *about*. A failure rarely announces
+    itself in the pattern that crossed a threshold: the loudest line is usually
+    a symptom, and the line that names the cause sits beside it, quieter, in
+    the same few minutes. Retrieving only the incident's own pattern means the
+    model is asked to explain a symptom while the evidence that explains it is
+    one row away.
+
+    ``is_primary`` keeps the two roles apart. The deterministic hypotheses are
+    scored from the primary pattern alone - widening them would change what
+    every existing weight means - while the model is shown the neighbourhood.
+    """
 
     log_pattern_id: str
     fingerprint: str
@@ -41,6 +53,9 @@ class PatternEvidence(_Model):
     first_seen_at: datetime
     last_seen_at: datetime
     http_status_code: int | None = None
+
+    #: False for a neighbouring pattern included only as context.
+    is_primary: bool = True
 
 
 class DeploymentEvidence(_Model):

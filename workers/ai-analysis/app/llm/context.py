@@ -80,6 +80,15 @@ class ContextPatternSummary(_Frozen):
     #: reconstruct anything.
     fingerprint_prefix: str
 
+    #: True for the pattern the incident was opened for; false for one included
+    #: because it was logged by the same service in the same window.
+    #:
+    #: Without this the model cannot tell the subject from its surroundings,
+    #: and a loud neighbour reads exactly like the fault. The flag says which
+    #: is which and leaves the model free to conclude that a neighbour explains
+    #: the subject - which is the entire reason they are sent.
+    is_incident_pattern: bool = True
+
 
 class ContextDeployment(_Frozen):
     """The release under suspicion."""
@@ -191,6 +200,7 @@ def _pattern_summary(pattern: PatternEvidence) -> ContextPatternSummary:
         last_seen_at=_iso(pattern.last_seen_at),
         http_status_code=pattern.http_status_code,
         fingerprint_prefix=pattern.fingerprint[:12],
+        is_incident_pattern=pattern.is_primary,
     )
 
 

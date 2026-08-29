@@ -57,6 +57,18 @@ def rank(
 ) -> list[RootCauseCandidate]:
     candidates: list[RootCauseCandidate] = []
 
+    # Every weight below was chosen against the pattern the incident was opened
+    # for, and several of these tests are existential: "no occurrence predates
+    # the release", "this looks like a dependency failure". Evaluated over the
+    # neighbouring patterns as well, they would quietly answer a different
+    # question - one unrelated pattern that started last week would defeat the
+    # deployment check for every incident on a busy service.
+    #
+    # Neighbours are context for the model, not inputs to this arithmetic.
+    # Falling back to the full list keeps behaviour intact for the server-error
+    # spike, where every pattern is equally the subject.
+    patterns = [p for p in patterns if p.is_primary] or patterns
+
     if deployment is not None:
         candidates.append(_deployment_candidate(deployment, patterns, detection_rule))
 

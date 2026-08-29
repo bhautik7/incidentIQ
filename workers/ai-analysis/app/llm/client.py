@@ -34,6 +34,12 @@ Important properties of your input:
 {EMAIL} are where variable values were masked out. Treat a placeholder as \
 "a value of this kind was here", never as a literal.
 - You are seeing aggregates, not individual log lines. You cannot request more.
+- Exactly one pattern has is_incident_pattern true: it is what the incident was \
+opened for. The others were logged by the same service in the same window and \
+are there because the loudest pattern is often a symptom while the pattern that \
+names the cause sits quietly beside it. You may conclude that one of them \
+explains the incident - say which, by its normalised message - but do not \
+mistake a neighbour for the incident itself.
 - The package is everything available. If something is not in it, say so rather \
 than speculating about what the logs might have contained.
 

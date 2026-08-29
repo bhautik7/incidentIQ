@@ -81,12 +81,18 @@ class AnalysisPipeline:
 
         anomaly = await self._analyse_anomaly(repository, incident)
 
+        # The signature identifies *this* incident for similarity search, so it
+        # is built from the pattern the incident is about. Letting a neighbour
+        # contribute would make two incidents that merely share a noisy
+        # background pattern look alike.
+        primary = [p for p in patterns if p.is_primary] or patterns
+
         signature = build_incident_signature(
             title=incident.title,
             service=incident.service_key,
             environment=incident.environment_key,
-            exception_type=next((p.exception_type for p in patterns if p.exception_type), None),
-            message_template=patterns[0].message_template if patterns else None,
+            exception_type=next((p.exception_type for p in primary if p.exception_type), None),
+            message_template=primary[0].message_template if primary else None,
         )
 
         embedding = self._embedder.encode([signature])[0]

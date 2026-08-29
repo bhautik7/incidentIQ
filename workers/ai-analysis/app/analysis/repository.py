@@ -21,6 +21,17 @@ from app.analysis.evidence import (
     SimilarIncidentEvidence,
 )
 
+#: How far either side of the incident's own window a neighbouring pattern may
+#: sit and still count as evidence. Wide enough to catch the cause that fired
+#: shortly before the symptom, narrow enough that unrelated background noise
+#: from earlier in the day stays out.
+NEIGHBOUR_WINDOW = timedelta(minutes=15)
+
+#: Neighbours retrieved at most. The context package caps what reaches the
+#: model at ten patterns; this keeps the query from fetching what would only be
+#: discarded.
+DEFAULT_NEIGHBOUR_LIMIT = 9
+
 
 @dataclass(frozen=True)
 class IncidentRecord:
@@ -86,22 +97,68 @@ class AnalysisRepository:
             else None,
         )
 
-    async def get_patterns(self, incident: IncidentRecord) -> list[PatternEvidence]:
-        """The log patterns this incident is about.
+    async def get_patterns(
+        self, incident: IncidentRecord, neighbour_limit: int = DEFAULT_NEIGHBOUR_LIMIT
+    ) -> list[PatternEvidence]:
+        """The log patterns worth showing for this incident.
 
-        Usually one - the pattern the incident was opened for. A server-error
-        spike has no single pattern, so the 5xx patterns of that service and
-        environment are gathered instead, which is what makes the evidence
-        useful for exactly the rule that has no fingerprint of its own.
+        The incident's own pattern comes first and is the only one marked
+        primary. After it come the other error patterns the same service logged
+        in the same window, quietest-last, marked as context.
+
+        Those neighbours are the point. A pattern crosses a threshold because
+        it is loud, and the loud line is usually the symptom: a 106-line outage
+        log put "connection pool exhausted" in the incident and left "Cannot
+        insert the value NULL into column 'Status'" - the actual fault - in the
+        pattern beside it, where nothing ever read it. The analysis explained
+        the symptom correctly and never saw the cause.
+
+        A server-error spike has no single pattern, so the 5xx patterns of that
+        service and environment are gathered instead, which is what makes the
+        evidence useful for exactly the rule that has no fingerprint of its own.
         """
         if incident.log_pattern_id:
+            # One statement, not two round trips: the incident's pattern, then
+            # its neighbours, ordered so the primary is always row zero.
+            # Callers downstream index patterns[0] for the incident's own
+            # template, and a UNION without a stable order would occasionally
+            # hand them a neighbour's.
             sql = """
                 SELECT id, fingerprint, message_template, sample_message, exception_type,
-                       occurrence_count, first_seen_at, last_seen_at, http_status_code
+                       occurrence_count, first_seen_at, last_seen_at, http_status_code,
+                       true AS is_primary, 0 AS sort_rank
                 FROM log_patterns
                 WHERE organization_id = %(org)s AND id = %(pattern)s
+
+                UNION ALL
+
+                SELECT id, fingerprint, message_template, sample_message, exception_type,
+                       occurrence_count, first_seen_at, last_seen_at, http_status_code,
+                       false AS is_primary, 1 AS sort_rank
+                FROM log_patterns
+                WHERE organization_id = %(org)s
+                  AND id <> %(pattern)s
+                  AND monitored_service_id = %(service)s
+                  AND environment_id = %(environment)s
+                  AND level IN ('Error', 'Fatal')
+                  -- Overlapping the incident's own window rather than merely
+                  -- recent: a pattern that stopped before this incident began
+                  -- is not evidence about it.
+                  AND last_seen_at >= %(window_start)s
+                  AND first_seen_at <= %(window_end)s
+                ORDER BY sort_rank, occurrence_count DESC
+                LIMIT %(limit)s
             """
-            params = {"org": incident.organization_id, "pattern": incident.log_pattern_id}
+            params = {
+                "org": incident.organization_id,
+                "pattern": incident.log_pattern_id,
+                "service": incident.monitored_service_id,
+                "environment": incident.environment_id,
+                "window_start": incident.first_seen_at - NEIGHBOUR_WINDOW,
+                "window_end": incident.last_seen_at + NEIGHBOUR_WINDOW,
+                # +1 so the primary row never displaces a neighbour.
+                "limit": neighbour_limit + 1,
+            }
         else:
             sql = """
                 SELECT id, fingerprint, message_template, sample_message, exception_type,
@@ -137,6 +194,9 @@ class AnalysisRepository:
                 first_seen_at=row["first_seen_at"],
                 last_seen_at=row["last_seen_at"],
                 http_status_code=row["http_status_code"],
+                # The 5xx branch returns no such column and every row there is
+                # equally the subject of the incident.
+                is_primary=row.get("is_primary", True),
             )
             for row in rows
         ]
